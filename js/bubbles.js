@@ -158,12 +158,23 @@ class BubbleManager {
     }
   }
 
-  // 显示已选中的词
+  // 显示已选中的词（可点击删除）
   showSelectedWord(word) {
     const indicator = document.getElementById('selected-words');
     const tag = document.createElement('span');
     tag.className = 'selected-tag';
     tag.textContent = word;
+    tag.title = '点击删除';
+    tag.addEventListener('click', () => {
+      // 从已选词中移除
+      const idx = this.selectedWords.indexOf(word);
+      if (idx > -1) {
+        this.selectedWords.splice(idx, 1);
+        this.selectedThisRound = Math.max(0, this.selectedThisRound - 1);
+      }
+      tag.classList.add('removing');
+      setTimeout(() => tag.remove(), 300);
+    });
     indicator.appendChild(tag);
     requestAnimationFrame(() => tag.classList.add('show'));
   }
