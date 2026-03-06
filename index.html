@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>泡沫来信 | Fizz Letter</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- 星空背景 -->
+  <div id="stars"></div>
+
+  <!-- 欢迎屏 -->
+  <div id="screen-welcome" class="screen active">
+    <h1 class="welcome-title">Fizz Letter</h1>
+    <p class="welcome-subtitle">泡 沫 来 信</p>
+    <button id="btn-start" class="btn-glow">拆一封信</button>
+  </div>
+
+  <!-- 气泡选择屏 -->
+  <div id="screen-bubbles" class="screen">
+    <div class="bubble-header">
+      <div id="round-indicator">第 1 / 3 轮</div>
+      <div class="bubble-hint">选择 1-2 个让你心动的词</div>
+    </div>
+    
+    <div id="bubble-container"></div>
+    
+    <div class="selected-area">
+      <div id="selected-words"></div>
+    </div>
+    
+    <div class="bubble-actions">
+      <button id="btn-shuffle" class="btn-ghost">换一组</button>
+      <button id="btn-skip" class="btn-ghost">下一轮 →</button>
+    </div>
+  </div>
+
+  <!-- 倾诉屏 -->
+  <div id="screen-message" class="screen">
+    <div class="message-box">
+      <div class="message-title">想说点什么吗？</div>
+      <div class="message-hint">写下此刻的心情，或者直接跳过</div>
+      <div id="words-preview"></div>
+      <textarea id="user-message" placeholder="写下你想说的话..."></textarea>
+      <div class="message-actions">
+        <button id="btn-skip-message" class="btn-ghost">直接寄出</button>
+        <button id="btn-send-message" class="btn-glow" style="animation: none;">寄出这封信</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 加载屏 -->
+  <div id="screen-loading" class="screen">
+    <div class="loading-content">
+      <div class="envelope">
+        <div class="envelope-flap"></div>
+        <div class="envelope-body"></div>
+      </div>
+      <div class="loading-text">信 正 在 写 ...</div>
+    </div>
+  </div>
+
+  <!-- 信件屏 -->
+  <div id="screen-letter" class="screen">
+    <div id="letter-paper" class="letter-paper template-parchment">
+      <div id="letter-body"></div>
+      <div id="letter-closing"></div>
+    </div>
+    <div class="letter-footer">
+      <button id="btn-restart">再拆一封</button>
+    </div>
+  </div>
+
+  <script src="js/letters.js"></script>
+  <script src="js/bubbles.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
