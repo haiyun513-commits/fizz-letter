@@ -16,6 +16,7 @@ const MIME_TYPES = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.ico': 'image/x-icon',
+  '.json': 'application/json',
 };
 
 function serveStatic(req, res) {
