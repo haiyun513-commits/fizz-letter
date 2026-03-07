@@ -5,7 +5,7 @@ const path = require('path');
 
 const API_URL = 'https://api.qiyiguo.uk/v1/chat/completions';
 const API_KEY = 'sk-ayYp4RQZB9jqBNMFqJsxMPRxmWn0LUJ2QfPcyg339qXKaZPM';
-const MODELS = ['gpt-5.4', 'claude-sonnet-4-6'];
+const MODELS = ['claude-sonnet-4-6'];
 const PORT = 4001;
 
 const MIME_TYPES = {
