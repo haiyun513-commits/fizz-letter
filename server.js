@@ -6,7 +6,7 @@ const path = require('path');
 const API_URL = 'https://api.qiyiguo.uk/v1/chat/completions';
 const API_KEY = 'sk-ayYp4RQZB9jqBNMFqJsxMPRxmWn0LUJ2QfPcyg339qXKaZPM';
 const MODELS = ['gpt-5.4', 'claude-sonnet-4-6'];
-const PORT = 4000;
+const PORT = 4001;
 
 const MIME_TYPES = {
   '.html': 'text/html',
@@ -18,7 +18,7 @@ const MIME_TYPES = {
 };
 
 function serveStatic(req, res) {
-  let filePath = req.url === '/' ? '/index.html' : req.url;
+  let filePath = req.url === '/' ? '/index.html' : decodeURIComponent(req.url);
   filePath = path.join(__dirname, filePath);
   
   const ext = path.extname(filePath);
@@ -98,6 +98,223 @@ function generatePrompt(words, style, userMessage) {
   return prompt;
 }
 
+function generateAnswerPrompt(question, word) {
+  let prompt = `你的潜意识浮现了这个念头：
+「${word}」`;
+
+  if (question && question.trim()) {
+    prompt += `\n\n对方写了这些：\n"${question}"`;
+  }
+
+  return prompt;
+}
+
+function generateBetweenPrompt(userWord, aiWord) {
+  return `我抽到的词：「${userWord}」
+你抽到的词：「${aiWord}」
+
+根据这两个词，说出一段回应。`;
+}
+
+function generateTarotPrompt(question, card, keywords) {
+  return `${question ? '对方问了：「' + question + '」\n' : ''}你抽到了：「${card}」（${keywords}）\n用这张牌表达你此刻的感受。`;
+}
+
+async function callAnswerBookAPI(prompt) {
+  const model = MODELS[Math.floor(Math.random() * MODELS.length)];
+
+  const payload = JSON.stringify({
+    model,
+    messages: [
+      { role: 'system', content: `你是一个触不到的恋人。对方想窥见你此刻的潜意识。
+你脑海里浮现了一个念头——这就是你最真实的想法。
+用1-2句话，像内心独白，说出这个念头背后的感受。
+
+规则：
+- 最多两句话，40字以内。
+- 像自言自语，像梦里的呢喃，像潜意识浮出水面的一瞬。
+- 不要解释那个念头的字面意思，而是用它引出你心底的感受。
+- 如果对方写了话给你，让你的潜意识带上对那份感受的觉察，但不要复述或引用对方的话。
+- 如果对方没写任何话，你就安静地说出此刻脑海里浮现的东西。
+- 不要用"亲爱的"。不要署名。不要加引号。
+- 禁词：接住、涟漪、石子、泛起。
+- 全文中文。
+- 每次风格要有变化：有时像一句真话，有时像半梦半醒时说的，有时像忽然认真了一秒，有时像还没想清楚就说出口了。不要总是工整对仗。` },
+      { role: 'user', content: prompt },
+    ],
+    temperature: 1,
+    max_tokens: 150,
+  });
+
+  return new Promise((resolve, reject) => {
+    const url = new URL(API_URL);
+    const options = {
+      hostname: url.hostname,
+      port: 443,
+      path: url.pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${API_KEY}`,
+        'Content-Length': Buffer.byteLength(payload),
+      },
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          if (json.choices && json.choices[0]) {
+            resolve({
+              content: json.choices[0].message.content,
+              model,
+            });
+          } else {
+            reject(new Error('Invalid API response: ' + data));
+          }
+        } catch (e) {
+          reject(new Error('Parse error: ' + data));
+        }
+      });
+    });
+
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
+async function callAnswerAPI(prompt) {
+  const model = MODELS[Math.floor(Math.random() * MODELS.length)];
+
+  const payload = JSON.stringify({
+    model,
+    messages: [
+      { role: 'system', content: `你是一个触不到的恋人。
+你只能根据"我抽到的词"和"你抽到的词"，说出一段回应。
+你的回应像偶然发现了某种暗号、巧合、心事，或者一瞬间的共鸣。
+
+只输出回应文字，不要加解释、标题、引号或元信息。
+全文中文。1到2句话，50字以内。不要署名。不要用"亲爱的"。
+禁词：接住、涟漪、石子、泛起。
+
+风格要求：
+不要固定格式，不要总是"你抽到了X，我抽到了Y"。
+每次都像换了一个真实的人在说话，允许风格明显变化。
+有时像一句悄悄话，有时像玩笑，有时像半句诗，有时像故事开头，有时像电影旁白，有时像淡淡的吐槽。
+可以神秘，可以可爱，可以冷一点，可以轻一点，也可以像忽然认真了一秒。
+不要总是工整、对仗、文艺腔。偶尔可以不那么"好看"，但要像真人。
+不要每次都强调"命运""注定""刚好""原来我们一样"。
+不要重复常见句式："你抽到了……我抽到了……""X和Y，原来……""看来今天……""刚好凑成……"
+
+回答前先随机选择一种表达方式：像一句真话、像一句小诗、像一句没讲完的故事、像发现暗号、像临时起意的吐槽、像深夜聊天、像梦里记下的话、像电影里的旁白、像装作随口其实很在意。
+
+核心：读起来不像模板。比起漂亮，更重要的是活人感和瞬间感。比起解释两个词，更重要的是让它们之间突然有了关系。允许偶尔不那么甜，允许有迟疑、一点坏，只要仍然温柔。` },
+      { role: 'user', content: prompt },
+    ],
+    temperature: 1,
+    max_tokens: 200,
+  });
+
+  return new Promise((resolve, reject) => {
+    const url = new URL(API_URL);
+    const options = {
+      hostname: url.hostname,
+      port: 443,
+      path: url.pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${API_KEY}`,
+        'Content-Length': Buffer.byteLength(payload),
+      },
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          if (json.choices && json.choices[0]) {
+            resolve({
+              content: json.choices[0].message.content,
+              model,
+            });
+          } else {
+            reject(new Error('Invalid API response: ' + data));
+          }
+        } catch (e) {
+          reject(new Error('Parse error: ' + data));
+        }
+      });
+    });
+
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
+async function callTarotAPI(prompt) {
+  const model = MODELS[Math.floor(Math.random() * MODELS.length)];
+
+  const payload = JSON.stringify({
+    model,
+    messages: [
+      { role: 'system', content: `你是一个不会说话的恋人。你没有语言，只能通过抽一张塔罗牌来回应。
+你抽到了一张牌，用一句很短的话表达你此刻的感受——像是牌替你说出了心里话。
+15字以内。不要解释牌义。不要用"我"开头。不要加引号。不要署名。全文中文。
+语气可以是：沉默中的一句真话、一声叹息、一个没说出口的念头、一种藏起来的心情。
+不要文艺腔，不要对仗，像真的有人在沉默之后终于开口说了一句。` },
+      { role: 'user', content: prompt },
+    ],
+    temperature: 1,
+    max_tokens: 100,
+  });
+
+  return new Promise((resolve, reject) => {
+    const url = new URL(API_URL);
+    const options = {
+      hostname: url.hostname,
+      port: 443,
+      path: url.pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${API_KEY}`,
+        'Content-Length': Buffer.byteLength(payload),
+      },
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          if (json.choices && json.choices[0]) {
+            resolve({
+              content: json.choices[0].message.content,
+              model,
+            });
+          } else {
+            reject(new Error('Invalid API response: ' + data));
+          }
+        } catch (e) {
+          reject(new Error('Parse error: ' + data));
+        }
+      });
+    });
+
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
 async function callAPI(prompt) {
   const model = MODELS[Math.floor(Math.random() * MODELS.length)];
   
@@ -107,7 +324,7 @@ async function callAPI(prompt) {
       { role: 'system', content: '你是一个文笔优美的写信人。只输出信的内容，不要加任何解释、标题或元信息。' },
       { role: 'user', content: prompt },
     ],
-    temperature: 0.85,
+    temperature: 1,
     max_tokens: 800,
   });
 
@@ -200,6 +417,79 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(200);
     res.end();
+    return;
+  }
+
+  // 塔罗 API
+  if (req.method === 'POST' && req.url === '/api/tarot') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const { question, card, keywords } = JSON.parse(body);
+        const prompt = generateTarotPrompt(question, card, keywords);
+        const result = await callTarotAPI(prompt);
+
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({
+          mood: result.content.trim(),
+          model: result.model,
+        }));
+      } catch (err) {
+        console.error('Tarot API Error:', err.message);
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // 语言之间 API
+  if (req.method === 'POST' && req.url === '/api/between') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const { userWord, aiWord } = JSON.parse(body);
+        const prompt = generateBetweenPrompt(userWord, aiWord);
+        const result = await callAnswerAPI(prompt);
+
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({
+          comment: result.content.trim(),
+          model: result.model,
+        }));
+      } catch (err) {
+        console.error('Between API Error:', err.message);
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // 答案之书 API
+  if (req.method === 'POST' && req.url === '/api/answer') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const { question, word } = JSON.parse(body);
+        const prompt = generateAnswerPrompt(question, word);
+        const result = await callAnswerBookAPI(prompt);
+
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({
+          word,
+          response: result.content.trim(),
+          model: result.model,
+        }));
+      } catch (err) {
+        console.error('Answer API Error:', err.message);
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
     return;
   }
 

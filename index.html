@@ -20,7 +20,12 @@
   <div id="screen-welcome" class="screen active">
     <h1 class="welcome-title">Fizz Letter</h1>
     <p class="welcome-subtitle">泡 沫 来 信</p>
-    <button id="btn-start" class="btn-glow">拆一封信</button>
+    <div class="welcome-buttons">
+      <button id="btn-start" class="btn-glow">拆一封信</button>
+      <button id="btn-answer-book" class="btn-glow btn-answer">翻个答案</button>
+      <button id="btn-between-words" class="btn-glow btn-between">语言之间</button>
+      <button id="btn-tarot" class="btn-glow btn-tarot">抽一张牌</button>
+    </div>
     <div class="theme-picker">
       <button class="theme-btn active" data-theme="light" title="晨雾">
         <span class="theme-dot theme-dot-light"></span>
@@ -88,9 +93,125 @@
     </div>
   </div>
 
+  <!-- 答案之书：提问屏 -->
+  <div id="screen-answer-input" class="screen">
+    <div class="answer-input-box">
+      <div class="answer-input-title">TA 此刻在想什么</div>
+      <div class="answer-input-hint">翻开这一页，窥见 TA 的潜意识</div>
+      <textarea id="answer-question" placeholder="写点你的心情，或者直接翻开..."></textarea>
+      <button id="btn-flip-answer" class="btn-glow" style="animation: none;">翻 开</button>
+      <button id="btn-answer-back" class="btn-ghost answer-back-btn">返回</button>
+    </div>
+  </div>
+
+  <!-- 答案之书：翻书动画屏 -->
+  <div id="screen-answer-loading" class="screen">
+    <div class="answer-flip-container">
+      <div class="answer-book">
+        <div class="answer-book-page answer-page-left"></div>
+        <div class="answer-book-page answer-page-right answer-page-flipping"></div>
+      </div>
+      <div class="answer-loading-text">翻 开 中 ...</div>
+    </div>
+  </div>
+
+  <!-- 答案之书：结果展示屏 -->
+  <div id="screen-answer-result" class="screen">
+    <div class="answer-result-card">
+      <div id="answer-word" class="answer-word"></div>
+      <div id="answer-response" class="answer-response"></div>
+    </div>
+    <div class="answer-footer">
+      <button id="btn-answer-save" class="btn-ghost">保存</button>
+      <button id="btn-answer-again" class="btn-ghost">再翻一页</button>
+    </div>
+  </div>
+
+  <!-- 语言之间：统一屏 -->
+  <div id="screen-between" class="screen">
+    <div id="orb-container" class="orb-container"></div>
+    <div class="between-stage">
+      <div class="between-title">语言之间</div>
+      <div id="between-hint" class="between-hint">你和我，各抽一个词</div>
+      <div class="cards-row">
+        <div class="card-col">
+          <div class="card-label">你 的</div>
+          <div class="flip-card" id="card-user">
+            <div class="flip-card-inner">
+              <div class="flip-card-back">
+                <span class="card-back-mark">?</span>
+              </div>
+              <div class="flip-card-front" id="card-user-word"></div>
+            </div>
+          </div>
+        </div>
+        <div class="card-col">
+          <div class="card-label">我 的</div>
+          <div class="flip-card" id="card-ai">
+            <div class="flip-card-inner">
+              <div class="flip-card-back">
+                <span class="card-back-mark">?</span>
+              </div>
+              <div class="flip-card-front" id="card-ai-word"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="between-countdown" class="between-countdown"></div>
+      <button id="btn-draw" class="btn-glow btn-draw" style="animation: none;">抽</button>
+      <div id="between-comment" class="between-comment"></div>
+      <div class="between-footer" id="between-footer">
+        <button id="btn-between-save" class="btn-ghost">保存</button>
+        <button id="btn-between-again" class="btn-ghost">再来一次</button>
+        <button id="btn-between-home" class="btn-ghost">返回</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 塔罗：提问屏 -->
+  <div id="screen-tarot-input" class="screen">
+    <div class="tarot-input-box">
+      <div class="tarot-input-title">塔罗</div>
+      <div class="tarot-input-hint">TA 不会说话，但可以抽一张牌告诉你</div>
+      <textarea id="tarot-question" placeholder="想问 TA 什么？也可以不问…"></textarea>
+      <button id="btn-tarot-draw" class="btn-glow" style="animation: none;">让 TA 抽</button>
+      <button id="btn-tarot-back" class="btn-ghost answer-back-btn">返回</button>
+    </div>
+  </div>
+
+  <!-- 塔罗：抽牌动画屏 -->
+  <div id="screen-tarot-loading" class="screen">
+    <div class="tarot-loading-container">
+      <div class="tarot-card-spinning">
+        <div class="tarot-card-back-display">?</div>
+      </div>
+      <div class="tarot-loading-text">正 在 抽 牌 ...</div>
+    </div>
+  </div>
+
+  <!-- 塔罗：结果屏 -->
+  <div id="screen-tarot-result" class="screen">
+    <div class="tarot-result-stage">
+      <img id="tarot-card-img" class="tarot-card-img" src="" alt="">
+      <div class="tarot-card-info">
+        <div id="tarot-name" class="tarot-name"></div>
+        <div id="tarot-name-en" class="tarot-name-en"></div>
+        <div id="tarot-keywords" class="tarot-keywords"></div>
+      </div>
+      <div id="tarot-mood" class="tarot-mood"></div>
+    </div>
+    <div class="tarot-footer">
+      <button id="btn-tarot-save" class="btn-ghost">保存</button>
+      <button id="btn-tarot-again" class="btn-ghost">再抽一张</button>
+      <button id="btn-tarot-home" class="btn-ghost">返回</button>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="js/letters.js"></script>
   <script src="js/bubbles.js"></script>
+  <script src="js/answer.js"></script>
+  <script src="js/tarot.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
