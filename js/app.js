@@ -97,6 +97,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // 泡沫邮局
+  document.getElementById('contact-toggle').addEventListener('click', () => {
+    document.getElementById('contact-popup').classList.toggle('show');
+  });
+
   // 开始按钮
   document.getElementById('btn-start').addEventListener('click', () => {
     showScreen('bubbles');

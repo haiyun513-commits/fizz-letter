@@ -247,6 +247,42 @@ body {
   animation: fadeInUp 1.2s cubic-bezier(0.4, 0, 0.2, 1) 0.9s both;
 }
 
+.contact-toggle {
+  margin-top: 2rem;
+  font-size: 0.7rem;
+  color: var(--text-ghost);
+  cursor: pointer;
+  letter-spacing: 0.15em;
+  transition: color 0.3s;
+  animation: fadeInUp 1.2s cubic-bezier(0.4, 0, 0.2, 1) 1.1s both;
+}
+.contact-toggle:hover {
+  color: var(--text-secondary);
+}
+.contact-popup {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 0.8rem;
+  padding: 12px 20px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  backdrop-filter: blur(var(--glass-blur));
+  animation: fadeInUp 0.3s ease both;
+}
+.contact-popup.show {
+  display: flex;
+}
+.contact-item {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+.contact-item:hover {
+  color: var(--text-primary);
+}
+
 .theme-btn {
   display: flex;
   align-items: center;
