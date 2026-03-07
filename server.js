@@ -9,6 +9,29 @@ const API_ROUTES = [
 ];
 const PORT = 4001;
 
+// === 统计系统 ===
+const STATS_FILE = path.join(__dirname, 'stats.json');
+
+function loadStats() {
+  try {
+    return JSON.parse(fs.readFileSync(STATS_FILE, 'utf-8'));
+  } catch {
+    return {};
+  }
+}
+
+function saveStats(stats) {
+  fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2));
+}
+
+function recordHit(feature) {
+  const stats = loadStats();
+  const today = new Date().toISOString().slice(0, 10);
+  if (!stats[today]) stats[today] = { visit: 0, letter: 0, answer: 0, between: 0, tarot: 0 };
+  stats[today][feature] = (stats[today][feature] || 0) + 1;
+  saveStats(stats);
+}
+
 const MIME_TYPES = {
   '.html': 'text/html',
   '.css': 'text/css',
@@ -305,6 +328,14 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // 统计查看
+  if (req.method === 'GET' && req.url === '/api/stats') {
+    const stats = loadStats();
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(stats));
+    return;
+  }
+
   // 塔罗 API
   if (req.method === 'POST' && req.url === '/api/tarot') {
     let body = '';
@@ -312,6 +343,7 @@ const server = http.createServer(async (req, res) => {
     req.on('end', async () => {
       try {
         const { question, card, keywords } = JSON.parse(body);
+        recordHit('tarot');
         const prompt = generateTarotPrompt(question, card, keywords);
         const result = await callTarotAPI(prompt);
 
@@ -336,6 +368,7 @@ const server = http.createServer(async (req, res) => {
     req.on('end', async () => {
       try {
         const { userWord, aiWord } = JSON.parse(body);
+        recordHit('between');
         const prompt = generateBetweenPrompt(userWord, aiWord);
         const result = await callAnswerAPI(prompt);
 
@@ -360,6 +393,7 @@ const server = http.createServer(async (req, res) => {
     req.on('end', async () => {
       try {
         const { question, word } = JSON.parse(body);
+        recordHit('answer');
         const prompt = generateAnswerPrompt(question, word);
         const result = await callAnswerBookAPI(prompt);
 
@@ -385,6 +419,7 @@ const server = http.createServer(async (req, res) => {
     req.on('end', async () => {
       try {
         const { words, style, userMessage } = JSON.parse(body);
+        recordHit('letter');
         const prompt = generatePrompt(words, style, userMessage);
         const result = await callAPI(prompt);
         const letter = parseLetter(result.content);
@@ -402,6 +437,11 @@ const server = http.createServer(async (req, res) => {
       }
     });
     return;
+  }
+
+  // 访问计数（只记首页）
+  if (req.url === '/' || req.url === '/index.html') {
+    recordHit('visit');
   }
 
   // 静态文件
