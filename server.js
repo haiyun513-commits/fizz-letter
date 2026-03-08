@@ -447,6 +447,48 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // === 用户设置 ===
+
+  // 改昵称
+  if (req.method === 'POST' && req.url === '/api/update-nickname') {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: '未登录' });
+    try {
+      const { nickname } = await parseBody(req);
+      if (!nickname || nickname.trim().length < 1) return sendJSON(res, 400, { error: '昵称不能为空' });
+      if (nickname.trim().length > 20) return sendJSON(res, 400, { error: '昵称最多20个字' });
+      const { error } = await supabase.from('users').update({ nickname: nickname.trim() }).eq('id', decoded.id);
+      if (error) return sendJSON(res, 500, { error: '修改失败' });
+      sendJSON(res, 200, { message: '昵称已更新', nickname: nickname.trim() });
+    } catch (err) {
+      console.error('Update nickname error:', err.message);
+      sendJSON(res, 500, { error: '服务器错误' });
+    }
+    return;
+  }
+
+  // 改密码
+  if (req.method === 'POST' && req.url === '/api/update-password') {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: '未登录' });
+    try {
+      const { oldPassword, newPassword } = await parseBody(req);
+      if (!oldPassword || !newPassword) return sendJSON(res, 400, { error: '请填写完整' });
+      if (newPassword.length < 6) return sendJSON(res, 400, { error: '新密码至少6位' });
+      const { data: user } = await supabase.from('users').select('password_hash').eq('id', decoded.id).single();
+      if (!user) return sendJSON(res, 401, { error: '用户不存在' });
+      const valid = await bcrypt.compare(oldPassword, user.password_hash);
+      if (!valid) return sendJSON(res, 400, { error: '原密码错误' });
+      const hash = await bcrypt.hash(newPassword, 10);
+      await supabase.from('users').update({ password_hash: hash }).eq('id', decoded.id);
+      sendJSON(res, 200, { message: '密码已更新' });
+    } catch (err) {
+      console.error('Update password error:', err.message);
+      sendJSON(res, 500, { error: '服务器错误' });
+    }
+    return;
+  }
+
   // === 信箱 ===
 
   // 保存记录

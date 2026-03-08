@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     tarotLoading: document.getElementById('screen-tarot-loading'),
     tarotResult: document.getElementById('screen-tarot-result'),
     mailbox: document.getElementById('screen-mailbox'),
+    settings: document.getElementById('screen-settings'),
   };
 
   const bubbleContainer = document.getElementById('bubble-container');
@@ -120,7 +121,83 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('btn-logout').addEventListener('click', () => {
     Auth.logout();
+    showScreen('welcome');
     updateAuthUI();
+  });
+
+  // === 设置页 ===
+  document.getElementById('btn-settings').addEventListener('click', () => {
+    const user = Auth.getUser();
+    if (!user) return;
+    document.getElementById('settings-nickname').value = user.nickname || '';
+    document.getElementById('settings-email').textContent = user.email || '';
+    document.getElementById('settings-old-pwd').value = '';
+    document.getElementById('settings-new-pwd').value = '';
+    document.getElementById('settings-confirm-pwd').value = '';
+    document.getElementById('nickname-msg').textContent = '';
+    document.getElementById('password-error').textContent = '';
+    document.getElementById('password-success').textContent = '';
+    showScreen('settings');
+  });
+
+  document.getElementById('btn-settings-back').addEventListener('click', () => {
+    showScreen('welcome');
+  });
+
+  // 保存昵称
+  document.getElementById('btn-save-nickname').addEventListener('click', async () => {
+    const nickname = document.getElementById('settings-nickname').value;
+    const msgEl = document.getElementById('nickname-msg');
+    msgEl.textContent = '';
+    try {
+      const resp = await fetch('/api/update-nickname', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...Auth.authHeaders() },
+        body: JSON.stringify({ nickname })
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error);
+      // 更新本地存储
+      const user = Auth.getUser();
+      user.nickname = data.nickname;
+      localStorage.setItem('fizz_user', JSON.stringify(user));
+      updateAuthUI();
+      msgEl.textContent = '已保存';
+      setTimeout(() => msgEl.textContent = '', 2000);
+    } catch (err) {
+      msgEl.style.color = '#e57373';
+      msgEl.textContent = err.message;
+      setTimeout(() => { msgEl.textContent = ''; msgEl.style.color = ''; }, 3000);
+    }
+  });
+
+  // 修改密码
+  document.getElementById('btn-save-password').addEventListener('click', async () => {
+    const oldPassword = document.getElementById('settings-old-pwd').value;
+    const newPassword = document.getElementById('settings-new-pwd').value;
+    const confirmPwd = document.getElementById('settings-confirm-pwd').value;
+    const errorEl = document.getElementById('password-error');
+    const successEl = document.getElementById('password-success');
+    errorEl.textContent = '';
+    successEl.textContent = '';
+    if (!oldPassword || !newPassword) { errorEl.textContent = '请填写完整'; return; }
+    if (newPassword.length < 6) { errorEl.textContent = '新密码至少6位'; return; }
+    if (newPassword !== confirmPwd) { errorEl.textContent = '两次密码不一致'; return; }
+    try {
+      const resp = await fetch('/api/update-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...Auth.authHeaders() },
+        body: JSON.stringify({ oldPassword, newPassword })
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error);
+      successEl.textContent = '密码已修改';
+      document.getElementById('settings-old-pwd').value = '';
+      document.getElementById('settings-new-pwd').value = '';
+      document.getElementById('settings-confirm-pwd').value = '';
+    } catch (err) {
+      errorEl.textContent = err.message;
+    }
   });
 
   // === 信箱 ===

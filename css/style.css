@@ -2054,3 +2054,38 @@ body {
   justify-content: center;
   gap: 16px;
 }
+
+/* === 设置页 === */
+.settings-box {
+  width: 340px;
+  max-width: 90vw;
+  animation: fadeInUp 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.settings-title {
+  color: var(--text-primary);
+  font-family: 'LXGW WenKai', serif;
+  font-size: 1.2rem;
+  text-align: center;
+  letter-spacing: 0.15em;
+  margin-bottom: 28px;
+}
+.settings-section {
+  margin-bottom: 20px;
+}
+.settings-label {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+  display: block;
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+}
+.settings-footer {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 32px;
+}

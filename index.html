@@ -39,7 +39,7 @@
     <div class="auth-area auth-logged-in" id="auth-user-area" style="display:none;">
       <span id="auth-nickname" class="auth-nickname"></span>
       <button id="btn-mailbox" class="auth-btn">信箱</button>
-      <button id="btn-logout" class="auth-btn auth-btn-small">退出</button>
+      <button id="btn-settings" class="auth-btn auth-btn-small">设置</button>
     </div>
     <h1 class="welcome-title">Fizz Letter</h1>
     <p class="welcome-subtitle">泡 沫 来 信</p>
@@ -257,6 +257,38 @@
       <div id="mailbox-detail-content" class="mailbox-detail-content"></div>
       <div class="mailbox-detail-footer">
         <button id="btn-detail-back" class="btn-ghost">返回信箱</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 设置页 -->
+  <div id="screen-settings" class="screen">
+    <div class="settings-box">
+      <div class="settings-title">设置</div>
+      <div class="settings-section">
+        <label class="settings-label">昵称</label>
+        <div class="settings-row">
+          <input type="text" id="settings-nickname" class="auth-input" style="margin-bottom:0;flex:1;">
+          <button id="btn-save-nickname" class="btn-ghost" style="margin-left:8px;white-space:nowrap;">保存</button>
+        </div>
+        <div id="nickname-msg" class="auth-success" style="text-align:left;"></div>
+      </div>
+      <div class="settings-section">
+        <label class="settings-label">修改密码</label>
+        <input type="password" id="settings-old-pwd" class="auth-input" placeholder="原密码">
+        <input type="password" id="settings-new-pwd" class="auth-input" placeholder="新密码（至少6位）">
+        <input type="password" id="settings-confirm-pwd" class="auth-input" placeholder="确认新密码">
+        <button id="btn-save-password" class="btn-glow auth-submit" style="animation:none;">修改密码</button>
+        <div id="password-error" class="auth-error"></div>
+        <div id="password-success" class="auth-success"></div>
+      </div>
+      <div class="settings-section" style="margin-top:24px;">
+        <div class="settings-label">邮箱</div>
+        <div id="settings-email" style="color:var(--text-ghost);font-size:0.85rem;"></div>
+      </div>
+      <div class="settings-footer">
+        <button id="btn-settings-back" class="btn-ghost">返回</button>
+        <button id="btn-logout" class="btn-ghost" style="color:var(--text-ghost);">退出登录</button>
       </div>
     </div>
   </div>
