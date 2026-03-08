@@ -102,6 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // === 信箱 ===
   const TYPE_LABELS = { letter: '来信', answer: '答案', between: '语言之间', tarot: '塔罗' };
+  let mailboxLetters = []; // 存储信件数据
 
   document.getElementById('btn-mailbox').addEventListener('click', () => {
     showScreen('mailbox');
@@ -112,6 +113,11 @@ document.addEventListener('DOMContentLoaded', () => {
     showScreen('welcome');
   });
 
+  // 详情返回信箱列表
+  document.getElementById('btn-detail-back').addEventListener('click', () => {
+    document.getElementById('mailbox-detail').style.display = 'none';
+  });
+
   async function loadMailbox() {
     const listEl = document.getElementById('mailbox-list');
     const emptyEl = document.getElementById('mailbox-empty');
@@ -119,22 +125,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const redeemBtn = document.getElementById('btn-redeem');
     listEl.innerHTML = '<div class="mailbox-loading">加载中...</div>';
     emptyEl.style.display = 'none';
+    document.getElementById('mailbox-detail').style.display = 'none';
     try {
-      const letters = await Auth.getMailbox();
+      mailboxLetters = await Auth.getMailbox();
       const user = Auth.getUser();
       if (user?.is_premium) {
-        infoEl.textContent = '✦ 无限信箱 · ' + letters.length + ' 封';
+        infoEl.textContent = '✦ 无限信箱 · ' + mailboxLetters.length + ' 封';
         redeemBtn.style.display = 'none';
       } else {
-        infoEl.textContent = letters.length + ' / 20 封';
+        infoEl.textContent = mailboxLetters.length + ' / 20 封';
         redeemBtn.style.display = 'block';
       }
-      if (letters.length === 0) {
+      if (mailboxLetters.length === 0) {
         listEl.innerHTML = '';
         emptyEl.style.display = 'block';
         return;
       }
-      listEl.innerHTML = letters.map(l => {
+      listEl.innerHTML = mailboxLetters.map((l, i) => {
         const date = new Date(l.created_at).toLocaleString('zh-CN', {
           month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'
         });
@@ -144,20 +151,78 @@ document.addEventListener('DOMContentLoaded', () => {
         if (meta.card) metaHint = meta.card;
         if (meta.userWord && meta.aiWord) metaHint = meta.userWord + ' × ' + meta.aiWord;
         if (meta.word) metaHint = '「' + meta.word + '」';
-        return '<div class="mailbox-item" onclick="this.classList.toggle(\'expanded\')">' +
+        return '<div class="mailbox-item" onclick="openMailboxDetail(' + i + ')">' +
           '<div class="mailbox-item-header">' +
           '<span class="mailbox-item-type">' + (TYPE_LABELS[l.type] || l.type) + '</span>' +
           '<span class="mailbox-item-date">' + date + '</span>' +
           '</div>' +
-          (metaHint ? '<div style="color:rgba(200,198,198,0.35);font-size:11px;margin-bottom:4px;">' + metaHint + '</div>' : '') +
+          (metaHint ? '<div style="color:var(--text-ghost);font-size:0.7rem;margin-bottom:4px;">' + metaHint + '</div>' : '') +
           '<div class="mailbox-item-preview">' + l.content + '</div>' +
-          '<div class="mailbox-item-full">' + l.content + '</div>' +
           '</div>';
       }).join('');
     } catch (err) {
       listEl.innerHTML = '<div class="mailbox-loading" style="color:#e57373;">' + err.message + '</div>';
     }
   }
+
+  // 打开信箱详情 — 还原原始展示样式
+  window.openMailboxDetail = function(index) {
+    const l = mailboxLetters[index];
+    if (!l) return;
+    const detail = document.getElementById('mailbox-detail');
+    const content = document.getElementById('mailbox-detail-content');
+    const meta = l.metadata || {};
+
+    if (l.type === 'letter') {
+      // 还原信纸样式
+      const paragraphs = l.content.split('\n').filter(p => p.trim()).map(p => '<p>' + p + '</p>').join('');
+      content.innerHTML = '<div class="letter-paper template-parchment"><div class="letter-body reveal">' + paragraphs + '</div></div>';
+    } else if (l.type === 'answer') {
+      // 还原答案之书样式
+      const word = meta.word || '?';
+      content.innerHTML = '<div class="answer-result-card">' +
+        '<div class="answer-word">「' + word + '」</div>' +
+        '<div class="answer-response">' + l.content + '</div>' +
+        '</div>';
+    } else if (l.type === 'tarot') {
+      // 还原塔罗样式 — 从 TAROT_CARDS 查找卡牌图片
+      const cardName = meta.card || '';
+      const card = typeof TAROT_CARDS !== 'undefined' ? TAROT_CARDS.find(c => c.name === cardName) : null;
+      const imgSrc = card ? 'images/tarot/' + encodeURIComponent(card.image) : '';
+      const enName = card ? card.en : '';
+      const keywords = meta.keywords || (card ? card.keywords : '');
+      content.innerHTML = '<div class="tarot-result-stage">' +
+        (imgSrc ? '<img class="tarot-card-img" src="' + imgSrc + '" alt="' + cardName + '">' : '') +
+        '<div class="tarot-card-info">' +
+        '<div class="tarot-name">' + cardName + '</div>' +
+        '<div class="tarot-name-en">' + enName + '</div>' +
+        '<div class="tarot-keywords">' + keywords + '</div>' +
+        '</div>' +
+        '<div class="tarot-mood show">' + l.content + '</div>' +
+        '</div>';
+    } else if (l.type === 'between') {
+      // 还原语言之间样式
+      const userWord = meta.userWord || '?';
+      const aiWord = meta.aiWord || '?';
+      content.innerHTML = '<div class="between-stage" style="position:relative;height:auto;justify-content:center;">' +
+        '<div class="cards-row">' +
+        '<div class="card-col"><div class="card-label">你 的</div>' +
+        '<div class="flip-card flipped"><div class="flip-card-inner">' +
+        '<div class="flip-card-back"><span class="card-back-mark">?</span></div>' +
+        '<div class="flip-card-front">' + userWord + '</div>' +
+        '</div></div></div>' +
+        '<div class="card-col"><div class="card-label">我 的</div>' +
+        '<div class="flip-card flipped"><div class="flip-card-inner">' +
+        '<div class="flip-card-back"><span class="card-back-mark">?</span></div>' +
+        '<div class="flip-card-front">' + aiWord + '</div>' +
+        '</div></div></div>' +
+        '</div>' +
+        '<div class="between-comment show">' + l.content + '</div>' +
+        '</div>';
+    }
+
+    detail.style.display = 'flex';
+  };
 
   // 兑换码弹窗
   document.getElementById('btn-redeem').addEventListener('click', () => {

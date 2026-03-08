@@ -2016,9 +2016,41 @@ body {
   font-size: 0.75rem;
   letter-spacing: 0.05em;
 }
-.mailbox-redeem-btn {
+.mailbox-footer {
   position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
+  bottom: 28px;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  z-index: 10;
+}
+
+/* 信箱详情还原视图 */
+.mailbox-detail {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-deep);
+  animation: fadeInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.mailbox-detail-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 20px;
+  overflow-y: auto;
+}
+.mailbox-detail-footer {
+  padding: 20px;
+  display: flex;
+  justify-content: center;
+  gap: 16px;
 }

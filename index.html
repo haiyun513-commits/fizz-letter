@@ -238,7 +238,6 @@
   <!-- 信箱 -->
   <div id="screen-mailbox" class="screen">
     <div class="mailbox-header">
-      <button id="btn-mailbox-back" class="btn-back">← 返回</button>
       <div class="mailbox-title">我的信箱</div>
       <div class="mailbox-info" id="mailbox-info"></div>
     </div>
@@ -249,7 +248,17 @@
       <div class="mailbox-empty-text">信箱还是空的</div>
       <div class="mailbox-empty-hint">去写封信、翻个答案、抽张牌吧</div>
     </div>
-    <button id="btn-redeem" class="btn-ghost mailbox-redeem-btn" style="display:none;">兑换码</button>
+    <div class="mailbox-footer">
+      <button id="btn-redeem" class="btn-ghost" style="display:none;">兑换码</button>
+      <button id="btn-mailbox-back" class="btn-ghost">返回</button>
+    </div>
+    <!-- 信箱详情还原视图 -->
+    <div id="mailbox-detail" class="mailbox-detail" style="display:none;">
+      <div id="mailbox-detail-content" class="mailbox-detail-content"></div>
+      <div class="mailbox-detail-footer">
+        <button id="btn-detail-back" class="btn-ghost">返回信箱</button>
+      </div>
+    </div>
   </div>
 
   <!-- 登录/注册弹窗 -->
