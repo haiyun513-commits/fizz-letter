@@ -1,3 +1,6 @@
 NOTION_TOKEN
 API_KEY
 .env
+node_modules/
+stats.json
+.claude/worktrees/

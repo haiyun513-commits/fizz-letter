@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fizz-letter-v1';
+const CACHE_NAME = 'fizz-letter-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -8,6 +8,7 @@ const STATIC_ASSETS = [
   '/js/bubbles.js',
   '/js/answer.js',
   '/js/tarot.js',
+  '/js/auth.js',
   '/images/favicon-32.png',
   '/images/favicon-16.png',
   '/images/apple-touch-icon.png',

@@ -1712,3 +1712,234 @@ body {
     margin-top: 20px;
   }
 }
+
+/* === 认证系统 === */
+.auth-area {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.auth-btn {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: rgba(200,198,198,0.7);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: all 0.3s;
+}
+.auth-btn:hover {
+  background: rgba(255,255,255,0.15);
+  color: rgba(200,198,198,0.95);
+}
+.auth-btn-small {
+  padding: 4px 10px;
+  font-size: 11px;
+}
+.auth-nickname {
+  color: rgba(200,198,198,0.6);
+  font-size: 12px;
+  margin-right: 4px;
+}
+.auth-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(6px);
+}
+.auth-modal-content {
+  background: rgba(15,20,35,0.9);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  padding: 32px 28px;
+  width: 320px;
+  max-width: 90vw;
+  position: relative;
+  backdrop-filter: blur(20px);
+}
+.auth-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: rgba(200,198,198,0.5);
+  font-size: 22px;
+  cursor: pointer;
+}
+.auth-title {
+  color: rgba(200,198,198,0.9);
+  font-size: 20px;
+  text-align: center;
+  margin-bottom: 20px;
+  font-weight: 400;
+  letter-spacing: 3px;
+}
+.auth-input {
+  width: 100%;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: rgba(200,198,198,0.9);
+  font-size: 14px;
+  margin-bottom: 12px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.3s;
+}
+.auth-input:focus {
+  border-color: rgba(6,88,140,0.5);
+}
+.auth-input::placeholder {
+  color: rgba(200,198,198,0.3);
+}
+.auth-submit {
+  width: 100%;
+  margin-top: 4px;
+  font-size: 14px;
+  padding: 10px;
+}
+.auth-switch {
+  text-align: center;
+  color: rgba(200,198,198,0.4);
+  font-size: 12px;
+  margin-top: 14px;
+}
+.auth-switch span {
+  color: rgba(6,88,140,0.8);
+  cursor: pointer;
+  text-decoration: underline;
+}
+.auth-error {
+  color: #e57373;
+  font-size: 12px;
+  text-align: center;
+  margin-top: 8px;
+  min-height: 16px;
+}
+.auth-success {
+  color: #81c784;
+  font-size: 12px;
+  text-align: center;
+  margin-top: 8px;
+  min-height: 16px;
+}
+.auth-hint {
+  color: rgba(200,198,198,0.5);
+  font-size: 12px;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+/* === 信箱 === */
+.mailbox-header {
+  padding: 16px 20px;
+  position: relative;
+}
+.mailbox-title {
+  text-align: center;
+  color: rgba(200,198,198,0.8);
+  font-size: 16px;
+  letter-spacing: 3px;
+  margin-top: 8px;
+}
+.mailbox-info {
+  text-align: center;
+  color: rgba(200,198,198,0.35);
+  font-size: 11px;
+  margin-top: 4px;
+}
+.mailbox-list {
+  padding: 0 16px 80px;
+  overflow-y: auto;
+  max-height: calc(100vh - 120px);
+}
+.mailbox-loading {
+  text-align: center;
+  color: rgba(200,198,198,0.4);
+  padding: 40px;
+}
+.mailbox-item {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.mailbox-item:hover {
+  background: rgba(255,255,255,0.07);
+}
+.mailbox-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.mailbox-item-type {
+  color: rgba(6,88,140,0.7);
+  font-size: 11px;
+  padding: 2px 8px;
+  background: rgba(6,88,140,0.1);
+  border-radius: 10px;
+}
+.mailbox-item-date {
+  color: rgba(200,198,198,0.3);
+  font-size: 11px;
+}
+.mailbox-item-preview {
+  color: rgba(200,198,198,0.6);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+.mailbox-item-full {
+  display: none;
+  color: rgba(200,198,198,0.75);
+  font-size: 13px;
+  line-height: 1.7;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  white-space: pre-wrap;
+}
+.mailbox-item.expanded .mailbox-item-preview {
+  display: none;
+}
+.mailbox-item.expanded .mailbox-item-full {
+  display: block;
+}
+.mailbox-empty {
+  text-align: center;
+  padding: 60px 20px;
+}
+.mailbox-empty-text {
+  color: rgba(200,198,198,0.5);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+.mailbox-empty-hint {
+  color: rgba(200,198,198,0.3);
+  font-size: 12px;
+}
+.mailbox-redeem-btn {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+}

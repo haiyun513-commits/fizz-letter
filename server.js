@@ -2,6 +2,16 @@ const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
+const JWT_SECRET = process.env.JWT_SECRET;
 
 const API_ROUTES = [
   { url: 'https://api.qiyiguo.uk/v1/chat/completions', key: 'sk-ayYp4RQZB9jqBNMFqJsxMPRxmWn0LUJ2QfPcyg339qXKaZPM', model: 'claude-sonnet-4-6' },
@@ -30,6 +40,36 @@ function recordHit(feature) {
   if (!stats[today]) stats[today] = { visit: 0, letter: 0, answer: 0, between: 0, tarot: 0 };
   stats[today][feature] = (stats[today][feature] || 0) + 1;
   saveStats(stats);
+}
+
+function signToken(user) {
+  return jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '30d' });
+}
+
+function verifyToken(req) {
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith('Bearer ')) return null;
+  try {
+    return jwt.verify(auth.slice(7), JWT_SECRET);
+  } catch {
+    return null;
+  }
+}
+
+function parseBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try { resolve(JSON.parse(body)); }
+      catch { reject(new Error('Invalid JSON')); }
+    });
+  });
+}
+
+function sendJSON(res, status, data) {
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify(data));
 }
 
 const MIME_TYPES = {
@@ -320,7 +360,7 @@ const server = http.createServer(async (req, res) => {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   
   if (req.method === 'OPTIONS') {
     res.writeHead(200);
@@ -336,106 +376,227 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // === 账号系统 ===
+
+  // 注册
+  if (req.method === 'POST' && req.url === '/api/register') {
+    try {
+      const { email, nickname, password } = await parseBody(req);
+      if (!email || !nickname || !password) {
+        return sendJSON(res, 400, { error: '请填写完整信息' });
+      }
+      if (password.length < 6) {
+        return sendJSON(res, 400, { error: '密码至少6位' });
+      }
+      const password_hash = await bcrypt.hash(password, 10);
+      const { data, error } = await supabase
+        .from('users')
+        .insert({ email: email.toLowerCase().trim(), nickname: nickname.trim(), password_hash })
+        .select('id, email, nickname, is_premium, created_at')
+        .single();
+      if (error) {
+        if (error.code === '23505') return sendJSON(res, 409, { error: '该邮箱已注册' });
+        return sendJSON(res, 500, { error: '注册失败' });
+      }
+      const token = signToken(data);
+      sendJSON(res, 201, { token, user: data });
+    } catch (err) {
+      console.error('Register error:', err.message);
+      sendJSON(res, 500, { error: '服务器错误' });
+    }
+    return;
+  }
+
+  // 登录
+  if (req.method === 'POST' && req.url === '/api/login') {
+    try {
+      const { email, password } = await parseBody(req);
+      if (!email || !password) return sendJSON(res, 400, { error: '请输入邮箱和密码' });
+      const { data: user, error } = await supabase
+        .from('users')
+        .select('id, email, nickname, password_hash, is_premium, created_at')
+        .eq('email', email.toLowerCase().trim())
+        .single();
+      if (error || !user) return sendJSON(res, 401, { error: '邮箱或密码错误' });
+      const valid = await bcrypt.compare(password, user.password_hash);
+      if (!valid) return sendJSON(res, 401, { error: '邮箱或密码错误' });
+      const { password_hash, ...safeUser } = user;
+      const token = signToken(safeUser);
+      sendJSON(res, 200, { token, user: safeUser });
+    } catch (err) {
+      console.error('Login error:', err.message);
+      sendJSON(res, 500, { error: '服务器错误' });
+    }
+    return;
+  }
+
+  // 获取当前用户
+  if (req.method === 'GET' && req.url === '/api/me') {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: '未登录' });
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id, email, nickname, is_premium, created_at')
+      .eq('id', decoded.id)
+      .single();
+    if (error || !user) return sendJSON(res, 401, { error: '用户不存在' });
+    sendJSON(res, 200, { user });
+    return;
+  }
+
+  // === 信箱 ===
+
+  // 保存记录
+  if (req.method === 'POST' && req.url === '/api/mailbox/save') {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: '未登录' });
+    try {
+      const { type, content, metadata } = await parseBody(req);
+      if (!type || !content) return sendJSON(res, 400, { error: '缺少必要字段' });
+      // 免费用户信箱上限
+      const { data: user } = await supabase.from('users').select('is_premium').eq('id', decoded.id).single();
+      if (!user?.is_premium) {
+        const { count } = await supabase.from('letters').select('id', { count: 'exact', head: true }).eq('user_id', decoded.id);
+        if (count >= 20) {
+          const { data: oldest } = await supabase.from('letters').select('id').eq('user_id', decoded.id).order('created_at', { ascending: true }).limit(1);
+          if (oldest && oldest[0]) await supabase.from('letters').delete().eq('id', oldest[0].id);
+        }
+      }
+      const { data, error } = await supabase
+        .from('letters')
+        .insert({ user_id: decoded.id, type, content, metadata: metadata || {} })
+        .select()
+        .single();
+      if (error) return sendJSON(res, 500, { error: '保存失败' });
+      sendJSON(res, 201, { letter: data });
+    } catch (err) {
+      console.error('Mailbox save error:', err.message);
+      sendJSON(res, 500, { error: '服务器错误' });
+    }
+    return;
+  }
+
+  // 获取信箱
+  if (req.method === 'GET' && req.url === '/api/mailbox') {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: '未登录' });
+    const { data, error } = await supabase
+      .from('letters')
+      .select('id, type, content, metadata, created_at')
+      .eq('user_id', decoded.id)
+      .order('created_at', { ascending: false });
+    if (error) return sendJSON(res, 500, { error: '获取失败' });
+    sendJSON(res, 200, { letters: data });
+    return;
+  }
+
+  // === 兑换码 ===
+
+  // 用户兑换
+  if (req.method === 'POST' && req.url === '/api/redeem') {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: '未登录' });
+    try {
+      const { code } = await parseBody(req);
+      if (!code) return sendJSON(res, 400, { error: '请输入兑换码' });
+      const { data: codeRecord, error: findErr } = await supabase
+        .from('redeem_codes')
+        .select('*')
+        .eq('code', code.trim().toUpperCase())
+        .single();
+      if (findErr || !codeRecord) return sendJSON(res, 404, { error: '兑换码无效' });
+      if (codeRecord.used_by) return sendJSON(res, 400, { error: '兑换码已被使用' });
+      await supabase.from('redeem_codes').update({ used_by: decoded.id, used_at: new Date().toISOString() }).eq('id', codeRecord.id);
+      await supabase.from('users').update({ is_premium: true }).eq('id', decoded.id);
+      sendJSON(res, 200, { message: '兑换成功！已解锁无限信箱' });
+    } catch (err) {
+      console.error('Redeem error:', err.message);
+      sendJSON(res, 500, { error: '服务器错误' });
+    }
+    return;
+  }
+
+  // 管理员生成兑换码
+  if (req.method === 'POST' && req.url === '/api/admin/generate-code') {
+    try {
+      const { count, adminKey } = await parseBody(req);
+      if (adminKey !== JWT_SECRET) return sendJSON(res, 403, { error: '无权限' });
+      const num = Math.min(count || 1, 50);
+      const codes = [];
+      for (let i = 0; i < num; i++) {
+        const code = Array.from({ length: 8 }, () =>
+          'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]
+        ).join('');
+        codes.push({ code });
+      }
+      const { data, error } = await supabase.from('redeem_codes').insert(codes).select('code, created_at');
+      if (error) return sendJSON(res, 500, { error: '生成失败' });
+      sendJSON(res, 201, { codes: data });
+    } catch (err) {
+      console.error('Generate code error:', err.message);
+      sendJSON(res, 500, { error: '服务器错误' });
+    }
+    return;
+  }
+
   // 塔罗 API
   if (req.method === 'POST' && req.url === '/api/tarot') {
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    req.on('end', async () => {
-      try {
-        const { question, card, keywords } = JSON.parse(body);
-        recordHit('tarot');
-        const prompt = generateTarotPrompt(question, card, keywords);
-        const result = await callTarotAPI(prompt);
-
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({
-          mood: result.content.trim(),
-          model: result.model,
-        }));
-      } catch (err) {
-        console.error('Tarot API Error:', err.message);
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ error: err.message }));
-      }
-    });
+    try {
+      const { question, card, keywords } = await parseBody(req);
+      recordHit('tarot');
+      const prompt = generateTarotPrompt(question, card, keywords);
+      const result = await callTarotAPI(prompt);
+      sendJSON(res, 200, { mood: result.content.trim(), model: result.model });
+    } catch (err) {
+      console.error('Tarot API Error:', err.message);
+      sendJSON(res, 500, { error: err.message });
+    }
     return;
   }
 
   // 语言之间 API
   if (req.method === 'POST' && req.url === '/api/between') {
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    req.on('end', async () => {
-      try {
-        const { userWord, aiWord } = JSON.parse(body);
-        recordHit('between');
-        const prompt = generateBetweenPrompt(userWord, aiWord);
-        const result = await callAnswerAPI(prompt);
-
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({
-          comment: result.content.trim(),
-          model: result.model,
-        }));
-      } catch (err) {
-        console.error('Between API Error:', err.message);
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ error: err.message }));
-      }
-    });
+    try {
+      const { userWord, aiWord } = await parseBody(req);
+      recordHit('between');
+      const prompt = generateBetweenPrompt(userWord, aiWord);
+      const result = await callAnswerAPI(prompt);
+      sendJSON(res, 200, { comment: result.content.trim(), model: result.model });
+    } catch (err) {
+      console.error('Between API Error:', err.message);
+      sendJSON(res, 500, { error: err.message });
+    }
     return;
   }
 
   // 答案之书 API
   if (req.method === 'POST' && req.url === '/api/answer') {
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    req.on('end', async () => {
-      try {
-        const { question, word } = JSON.parse(body);
-        recordHit('answer');
-        const prompt = generateAnswerPrompt(question, word);
-        const result = await callAnswerBookAPI(prompt);
-
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({
-          word,
-          response: result.content.trim(),
-          model: result.model,
-        }));
-      } catch (err) {
-        console.error('Answer API Error:', err.message);
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ error: err.message }));
-      }
-    });
+    try {
+      const { question, word } = await parseBody(req);
+      recordHit('answer');
+      const prompt = generateAnswerPrompt(question, word);
+      const result = await callAnswerBookAPI(prompt);
+      sendJSON(res, 200, { word, response: result.content.trim(), model: result.model });
+    } catch (err) {
+      console.error('Answer API Error:', err.message);
+      sendJSON(res, 500, { error: err.message });
+    }
     return;
   }
 
   // API endpoint
   if (req.method === 'POST' && req.url === '/api/letter') {
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    req.on('end', async () => {
-      try {
-        const { words, style, userMessage } = JSON.parse(body);
-        recordHit('letter');
-        const prompt = generatePrompt(words, style, userMessage);
-        const result = await callAPI(prompt);
-        const letter = parseLetter(result.content);
-        
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({
-          body: letter.body,
-          closing: letter.closing,
-          model: result.model,
-        }));
-      } catch (err) {
-        console.error('API Error:', err.message);
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ error: err.message }));
-      }
-    });
+    try {
+      const { words, style, userMessage } = await parseBody(req);
+      recordHit('letter');
+      const prompt = generatePrompt(words, style, userMessage);
+      const result = await callAPI(prompt);
+      const letter = parseLetter(result.content);
+      sendJSON(res, 200, { body: letter.body, closing: letter.closing, model: result.model });
+    } catch (err) {
+      console.error('API Error:', err.message);
+      sendJSON(res, 500, { error: err.message });
+    }
     return;
   }
 
@@ -448,6 +609,9 @@ const server = http.createServer(async (req, res) => {
   serveStatic(req, res);
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   console.log(`泡沫来信服务器启动: http://localhost:${PORT}`);
+  const { error } = await supabase.from('users').select('id').limit(1);
+  if (error) console.error('Supabase 连接失败:', error.message);
+  else console.log('Supabase 连接成功');
 });

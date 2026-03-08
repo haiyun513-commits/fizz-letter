@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     tarotInput: document.getElementById('screen-tarot-input'),
     tarotLoading: document.getElementById('screen-tarot-loading'),
     tarotResult: document.getElementById('screen-tarot-result'),
+    mailbox: document.getElementById('screen-mailbox'),
   };
 
   const bubbleContainer = document.getElementById('bubble-container');
@@ -25,6 +26,167 @@ document.addEventListener('DOMContentLoaded', () => {
     screens[name].classList.add('active');
     currentScreen = name;
   }
+
+  // === 认证 ===
+  const authModal = document.getElementById('auth-modal');
+
+  function updateAuthUI() {
+    if (Auth.isLoggedIn()) {
+      const user = Auth.getUser();
+      document.getElementById('auth-area').style.display = 'none';
+      document.getElementById('auth-user-area').style.display = 'flex';
+      document.getElementById('auth-nickname').textContent = user?.nickname || '';
+    } else {
+      document.getElementById('auth-area').style.display = 'flex';
+      document.getElementById('auth-user-area').style.display = 'none';
+    }
+  }
+
+  Auth.checkSession().then(updateAuthUI);
+
+  document.getElementById('btn-login').addEventListener('click', () => {
+    authModal.style.display = 'flex';
+    document.getElementById('auth-form-login').style.display = 'block';
+    document.getElementById('auth-form-register').style.display = 'none';
+  });
+
+  document.getElementById('auth-modal-close').addEventListener('click', () => {
+    authModal.style.display = 'none';
+  });
+  authModal.addEventListener('click', (e) => {
+    if (e.target === authModal) authModal.style.display = 'none';
+  });
+
+  document.getElementById('show-register').addEventListener('click', () => {
+    document.getElementById('auth-form-login').style.display = 'none';
+    document.getElementById('auth-form-register').style.display = 'block';
+  });
+  document.getElementById('show-login').addEventListener('click', () => {
+    document.getElementById('auth-form-register').style.display = 'none';
+    document.getElementById('auth-form-login').style.display = 'block';
+  });
+
+  document.getElementById('btn-do-login').addEventListener('click', async () => {
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+    const errorEl = document.getElementById('login-error');
+    errorEl.textContent = '';
+    try {
+      await Auth.login(email, password);
+      authModal.style.display = 'none';
+      updateAuthUI();
+    } catch (err) {
+      errorEl.textContent = err.message;
+    }
+  });
+
+  document.getElementById('btn-do-register').addEventListener('click', async () => {
+    const email = document.getElementById('register-email').value;
+    const nickname = document.getElementById('register-nickname').value;
+    const password = document.getElementById('register-password').value;
+    const errorEl = document.getElementById('register-error');
+    errorEl.textContent = '';
+    try {
+      await Auth.register(email, nickname, password);
+      authModal.style.display = 'none';
+      updateAuthUI();
+    } catch (err) {
+      errorEl.textContent = err.message;
+    }
+  });
+
+  document.getElementById('btn-logout').addEventListener('click', () => {
+    Auth.logout();
+    updateAuthUI();
+  });
+
+  // === 信箱 ===
+  const TYPE_LABELS = { letter: '来信', answer: '答案', between: '语言之间', tarot: '塔罗' };
+
+  document.getElementById('btn-mailbox').addEventListener('click', () => {
+    showScreen('mailbox');
+    loadMailbox();
+  });
+
+  document.getElementById('btn-mailbox-back').addEventListener('click', () => {
+    showScreen('welcome');
+  });
+
+  async function loadMailbox() {
+    const listEl = document.getElementById('mailbox-list');
+    const emptyEl = document.getElementById('mailbox-empty');
+    const infoEl = document.getElementById('mailbox-info');
+    const redeemBtn = document.getElementById('btn-redeem');
+    listEl.innerHTML = '<div class="mailbox-loading">加载中...</div>';
+    emptyEl.style.display = 'none';
+    try {
+      const letters = await Auth.getMailbox();
+      const user = Auth.getUser();
+      if (user?.is_premium) {
+        infoEl.textContent = '✦ 无限信箱 · ' + letters.length + ' 封';
+        redeemBtn.style.display = 'none';
+      } else {
+        infoEl.textContent = letters.length + ' / 20 封';
+        redeemBtn.style.display = 'block';
+      }
+      if (letters.length === 0) {
+        listEl.innerHTML = '';
+        emptyEl.style.display = 'block';
+        return;
+      }
+      listEl.innerHTML = letters.map(l => {
+        const date = new Date(l.created_at).toLocaleString('zh-CN', {
+          month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
+        const meta = l.metadata || {};
+        let metaHint = '';
+        if (meta.words) metaHint = meta.words.join(' · ');
+        if (meta.card) metaHint = meta.card;
+        if (meta.userWord && meta.aiWord) metaHint = meta.userWord + ' × ' + meta.aiWord;
+        if (meta.word) metaHint = '「' + meta.word + '」';
+        return '<div class="mailbox-item" onclick="this.classList.toggle(\'expanded\')">' +
+          '<div class="mailbox-item-header">' +
+          '<span class="mailbox-item-type">' + (TYPE_LABELS[l.type] || l.type) + '</span>' +
+          '<span class="mailbox-item-date">' + date + '</span>' +
+          '</div>' +
+          (metaHint ? '<div style="color:rgba(200,198,198,0.35);font-size:11px;margin-bottom:4px;">' + metaHint + '</div>' : '') +
+          '<div class="mailbox-item-preview">' + l.content + '</div>' +
+          '<div class="mailbox-item-full">' + l.content + '</div>' +
+          '</div>';
+      }).join('');
+    } catch (err) {
+      listEl.innerHTML = '<div class="mailbox-loading" style="color:#e57373;">' + err.message + '</div>';
+    }
+  }
+
+  // 兑换码弹窗
+  document.getElementById('btn-redeem').addEventListener('click', () => {
+    document.getElementById('redeem-modal').style.display = 'flex';
+  });
+  document.getElementById('redeem-modal-close').addEventListener('click', () => {
+    document.getElementById('redeem-modal').style.display = 'none';
+  });
+  document.getElementById('redeem-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'redeem-modal') e.target.style.display = 'none';
+  });
+  document.getElementById('btn-do-redeem').addEventListener('click', async () => {
+    const code = document.getElementById('redeem-code').value;
+    const errorEl = document.getElementById('redeem-error');
+    const successEl = document.getElementById('redeem-success');
+    errorEl.textContent = '';
+    successEl.textContent = '';
+    try {
+      const msg = await Auth.redeem(code);
+      successEl.textContent = msg;
+      updateAuthUI();
+      setTimeout(() => {
+        document.getElementById('redeem-modal').style.display = 'none';
+        loadMailbox();
+      }, 1500);
+    } catch (err) {
+      errorEl.textContent = err.message;
+    }
+  });
 
   // 星光系统
   const starCanvas = document.getElementById('starfield');
@@ -177,11 +339,13 @@ document.addEventListener('DOMContentLoaded', () => {
         english: data.english || '',
         template: randomTemplate,
       });
+      Auth.saveToMailbox('letter', data.body, { words, userMessage: userMessage || undefined });
     } catch (err) {
       console.log('API unavailable, using pre-written letter:', err.message);
       // fallback到预写信件
       const letter = getRandomLetter(style, userMessage);
       displayLetter(letter);
+      Auth.saveToMailbox('letter', letter.body, { words, userMessage: userMessage || undefined });
     }
   }
 
@@ -375,11 +539,13 @@ document.addEventListener('DOMContentLoaded', () => {
       // 翻书动画至少显示 1.5 秒
       await new Promise(r => setTimeout(r, 1500));
       displayAnswer(result);
+      Auth.saveToMailbox('answer', result.response, { word: result.word });
     } catch (err) {
       console.log('Answer API unavailable, using fallback:', err.message);
       await new Promise(r => setTimeout(r, 1200));
       const result = answerBook.getFallbackAnswer(question);
       displayAnswer(result);
+      Auth.saveToMailbox('answer', result.response, { word: result.word });
     }
   });
 
@@ -688,6 +854,7 @@ document.addEventListener('DOMContentLoaded', () => {
       comment.textContent = fallbacks[Math.floor(Math.random() * fallbacks.length)];
     }
     comment.classList.add('show');
+    Auth.saveToMailbox('between', comment.textContent, { userWord: betweenUserWord, aiWord: betweenAiWord });
 
     await new Promise(r => setTimeout(r, 400));
     footer.classList.add('show');
@@ -883,11 +1050,13 @@ document.addEventListener('DOMContentLoaded', () => {
       await new Promise(r => setTimeout(r, 2000));
       const mood = await moodPromise;
       displayTarot(card, mood);
+      Auth.saveToMailbox('tarot', mood, { card: card.name, keywords: card.keywords });
     } catch (err) {
       console.log('Tarot API unavailable, using fallback:', err.message);
       await new Promise(r => setTimeout(r, 1500));
       const mood = tarotDeck.getFallbackMood();
       displayTarot(card, mood);
+      Auth.saveToMailbox('tarot', mood, { card: card.name, keywords: card.keywords });
     }
   });
 

@@ -32,6 +32,15 @@
 
   <!-- 欢迎屏 -->
   <div id="screen-welcome" class="screen active">
+    <!-- 右上角登录/用户区 -->
+    <div class="auth-area" id="auth-area">
+      <button id="btn-login" class="auth-btn">登录</button>
+    </div>
+    <div class="auth-area auth-logged-in" id="auth-user-area" style="display:none;">
+      <span id="auth-nickname" class="auth-nickname"></span>
+      <button id="btn-mailbox" class="auth-btn">信箱</button>
+      <button id="btn-logout" class="auth-btn auth-btn-small">退出</button>
+    </div>
     <h1 class="welcome-title">Fizz Letter</h1>
     <p class="welcome-subtitle">泡 沫 来 信</p>
     <div class="welcome-buttons">
@@ -226,11 +235,66 @@
     </div>
   </div>
 
+  <!-- 信箱 -->
+  <div id="screen-mailbox" class="screen">
+    <div class="mailbox-header">
+      <button id="btn-mailbox-back" class="btn-back">← 返回</button>
+      <div class="mailbox-title">我的信箱</div>
+      <div class="mailbox-info" id="mailbox-info"></div>
+    </div>
+    <div class="mailbox-list" id="mailbox-list">
+      <div class="mailbox-loading">加载中...</div>
+    </div>
+    <div class="mailbox-empty" id="mailbox-empty" style="display:none;">
+      <div class="mailbox-empty-text">信箱还是空的</div>
+      <div class="mailbox-empty-hint">去写封信、翻个答案、抽张牌吧</div>
+    </div>
+    <button id="btn-redeem" class="btn-ghost mailbox-redeem-btn" style="display:none;">兑换码</button>
+  </div>
+
+  <!-- 登录/注册弹窗 -->
+  <div id="auth-modal" class="auth-modal" style="display:none;">
+    <div class="auth-modal-content">
+      <button id="auth-modal-close" class="auth-modal-close">&times;</button>
+      <div id="auth-form-login" class="auth-form">
+        <h3 class="auth-title">登录</h3>
+        <input type="email" id="login-email" class="auth-input" placeholder="邮箱">
+        <input type="password" id="login-password" class="auth-input" placeholder="密码">
+        <button id="btn-do-login" class="btn-glow auth-submit" style="animation:none;">登录</button>
+        <div class="auth-switch">还没有账号？<span id="show-register">注册</span></div>
+        <div id="login-error" class="auth-error"></div>
+      </div>
+      <div id="auth-form-register" class="auth-form" style="display:none;">
+        <h3 class="auth-title">注册</h3>
+        <input type="email" id="register-email" class="auth-input" placeholder="邮箱">
+        <input type="text" id="register-nickname" class="auth-input" placeholder="昵称">
+        <input type="password" id="register-password" class="auth-input" placeholder="密码（至少6位）">
+        <button id="btn-do-register" class="btn-glow auth-submit" style="animation:none;">注册</button>
+        <div class="auth-switch">已有账号？<span id="show-login">登录</span></div>
+        <div id="register-error" class="auth-error"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 兑换码弹窗 -->
+  <div id="redeem-modal" class="auth-modal" style="display:none;">
+    <div class="auth-modal-content">
+      <button id="redeem-modal-close" class="auth-modal-close">&times;</button>
+      <h3 class="auth-title">兑换码</h3>
+      <p class="auth-hint">输入兑换码解锁无限信箱</p>
+      <input type="text" id="redeem-code" class="auth-input" placeholder="请输入8位兑换码" maxlength="8" style="text-transform:uppercase;">
+      <button id="btn-do-redeem" class="btn-glow auth-submit" style="animation:none;">兑换</button>
+      <div id="redeem-error" class="auth-error"></div>
+      <div id="redeem-success" class="auth-success"></div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="js/letters.js"></script>
   <script src="js/bubbles.js"></script>
   <script src="js/answer.js"></script>
   <script src="js/tarot.js"></script>
+  <script src="js/auth.js"></script>
   <script src="js/app.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
