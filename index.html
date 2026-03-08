@@ -271,7 +271,17 @@
         <input type="password" id="login-password" class="auth-input" placeholder="密码">
         <button id="btn-do-login" class="btn-glow auth-submit" style="animation:none;">登录</button>
         <div class="auth-switch">还没有账号？<span id="show-register">注册</span></div>
+        <div class="auth-switch"><span id="show-forgot">忘记密码？</span></div>
         <div id="login-error" class="auth-error"></div>
+      </div>
+      <div id="auth-form-forgot" class="auth-form" style="display:none;">
+        <h3 class="auth-title">忘记密码</h3>
+        <p class="auth-hint">输入注册邮箱，我们会发送重置链接</p>
+        <input type="email" id="forgot-email" class="auth-input" placeholder="邮箱">
+        <button id="btn-do-forgot" class="btn-glow auth-submit" style="animation:none;">发送重置链接</button>
+        <div class="auth-switch"><span id="forgot-back-login">返回登录</span></div>
+        <div id="forgot-error" class="auth-error"></div>
+        <div id="forgot-success" class="auth-success"></div>
       </div>
       <div id="auth-form-register" class="auth-form" style="display:none;">
         <h3 class="auth-title">注册</h3>

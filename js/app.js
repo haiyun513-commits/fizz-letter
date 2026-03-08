@@ -44,10 +44,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   Auth.checkSession().then(updateAuthUI);
 
+  function showAuthForm(form) {
+    document.getElementById('auth-form-login').style.display = form === 'login' ? 'block' : 'none';
+    document.getElementById('auth-form-register').style.display = form === 'register' ? 'block' : 'none';
+    document.getElementById('auth-form-forgot').style.display = form === 'forgot' ? 'block' : 'none';
+  }
+
   document.getElementById('btn-login').addEventListener('click', () => {
     authModal.style.display = 'flex';
-    document.getElementById('auth-form-login').style.display = 'block';
-    document.getElementById('auth-form-register').style.display = 'none';
+    showAuthForm('login');
   });
 
   document.getElementById('auth-modal-close').addEventListener('click', () => {
@@ -57,13 +62,31 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target === authModal) authModal.style.display = 'none';
   });
 
-  document.getElementById('show-register').addEventListener('click', () => {
-    document.getElementById('auth-form-login').style.display = 'none';
-    document.getElementById('auth-form-register').style.display = 'block';
-  });
-  document.getElementById('show-login').addEventListener('click', () => {
-    document.getElementById('auth-form-register').style.display = 'none';
-    document.getElementById('auth-form-login').style.display = 'block';
+  document.getElementById('show-register').addEventListener('click', () => showAuthForm('register'));
+  document.getElementById('show-login').addEventListener('click', () => showAuthForm('login'));
+  document.getElementById('show-forgot').addEventListener('click', () => showAuthForm('forgot'));
+  document.getElementById('forgot-back-login').addEventListener('click', () => showAuthForm('login'));
+
+  // 忘记密码
+  document.getElementById('btn-do-forgot').addEventListener('click', async () => {
+    const email = document.getElementById('forgot-email').value;
+    const errorEl = document.getElementById('forgot-error');
+    const successEl = document.getElementById('forgot-success');
+    errorEl.textContent = '';
+    successEl.textContent = '';
+    if (!email) { errorEl.textContent = '请输入邮箱'; return; }
+    try {
+      const resp = await fetch('/api/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error);
+      successEl.textContent = '重置链接已发送，请查收邮箱';
+    } catch (err) {
+      errorEl.textContent = err.message;
+    }
   });
 
   document.getElementById('btn-do-login').addEventListener('click', async () => {

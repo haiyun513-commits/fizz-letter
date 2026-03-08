@@ -12,6 +12,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 );
 const JWT_SECRET = process.env.JWT_SECRET;
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const SITE_URL = process.env.SITE_URL || 'http://localhost:4001';
+const crypto = require('crypto');
 
 const API_ROUTES = [
   { url: 'https://api.qiyiguo.uk/v1/chat/completions', key: 'sk-ayYp4RQZB9jqBNMFqJsxMPRxmWn0LUJ2QfPcyg339qXKaZPM', model: 'claude-sonnet-4-6' },
@@ -511,6 +514,77 @@ const server = http.createServer(async (req, res) => {
       sendJSON(res, 200, { message: '兑换成功！已解锁无限信箱' });
     } catch (err) {
       console.error('Redeem error:', err.message);
+      sendJSON(res, 500, { error: '服务器错误' });
+    }
+    return;
+  }
+
+  // === 忘记密码 ===
+  if (req.method === 'POST' && req.url === '/api/forgot-password') {
+    try {
+      const { email } = await parseBody(req);
+      if (!email) return sendJSON(res, 400, { error: '请输入邮箱' });
+      const { data: user } = await supabase
+        .from('users').select('id, nickname').eq('email', email.toLowerCase().trim()).single();
+      // 不管用户存不存在都返回成功（防止枚举）
+      if (!user) return sendJSON(res, 200, { message: '如果该邮箱已注册，重置链接已发送' });
+      // 生成 token，30 分钟过期
+      const token = crypto.randomBytes(32).toString('hex');
+      const expires_at = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+      await supabase.from('password_resets').insert({ user_id: user.id, token, expires_at });
+      // 发邮件
+      const resetUrl = SITE_URL + '/reset.html?token=' + token;
+      const emailBody = JSON.stringify({
+        from: 'Fizz Letter <noreply@fizzletter.cc>',
+        to: [email.toLowerCase().trim()],
+        subject: '泡沫来信 · 重置密码',
+        html: `<div style="font-family:serif;max-width:480px;margin:0 auto;padding:40px 20px;">
+          <h2 style="text-align:center;font-weight:400;letter-spacing:3px;color:#3c465a;">泡沫来信</h2>
+          <p style="color:#555;line-height:1.8;margin-top:24px;">亲爱的 ${user.nickname}，</p>
+          <p style="color:#555;line-height:1.8;">收到你的重置密码请求。点击下方按钮设置新密码：</p>
+          <div style="text-align:center;margin:32px 0;">
+            <a href="${resetUrl}" style="background:#8ca0c8;color:#fff;padding:12px 36px;border-radius:24px;text-decoration:none;font-size:14px;letter-spacing:2px;">重置密码</a>
+          </div>
+          <p style="color:#999;font-size:12px;line-height:1.6;">链接 30 分钟内有效。如果不是你操作的，请忽略这封邮件。</p>
+          <p style="color:#ccc;font-size:11px;text-align:center;margin-top:40px;">泡沫来信 Fizz Letter</p>
+        </div>`
+      });
+      const emailReq = https.request('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + RESEND_API_KEY, 'Content-Type': 'application/json' }
+      }, emailRes => {
+        let d = '';
+        emailRes.on('data', c => d += c);
+        emailRes.on('end', () => {
+          if (emailRes.statusCode >= 400) console.error('Resend error:', d);
+        });
+      });
+      emailReq.write(emailBody);
+      emailReq.end();
+      sendJSON(res, 200, { message: '如果该邮箱已注册，重置链接已发送' });
+    } catch (err) {
+      console.error('Forgot password error:', err.message);
+      sendJSON(res, 500, { error: '服务器错误' });
+    }
+    return;
+  }
+
+  // 重置密码
+  if (req.method === 'POST' && req.url === '/api/reset-password') {
+    try {
+      const { token, password } = await parseBody(req);
+      if (!token || !password) return sendJSON(res, 400, { error: '缺少参数' });
+      if (password.length < 6) return sendJSON(res, 400, { error: '密码至少6位' });
+      const { data: record } = await supabase
+        .from('password_resets').select('*').eq('token', token).eq('used', false).single();
+      if (!record) return sendJSON(res, 400, { error: '链接无效或已过期' });
+      if (new Date(record.expires_at) < new Date()) return sendJSON(res, 400, { error: '链接已过期，请重新申请' });
+      const hash = await bcrypt.hash(password, 10);
+      await supabase.from('users').update({ password_hash: hash }).eq('id', record.user_id);
+      await supabase.from('password_resets').update({ used: true }).eq('id', record.id);
+      sendJSON(res, 200, { message: '密码重置成功' });
+    } catch (err) {
+      console.error('Reset password error:', err.message);
       sendJSON(res, 500, { error: '服务器错误' });
     }
     return;
