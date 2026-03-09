@@ -3,10 +3,49 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-const API_URL = 'https://api.qiyiguo.uk/v1/chat/completions';
-const API_KEY = 'sk-ayYp4RQZB9jqBNMFqJsxMPRxmWn0LUJ2QfPcyg339qXKaZPM';
-const MODELS = ['claude-sonnet-4-6'];
+const API_ROUTES = [
+  { url: 'https://api.gemai.cc/v1/chat/completions', key: 'sk-kFq9yNybHRm9Rv8j5aOtLiglMdTL6ktGpo9S3n3c458QaUEh', model: 'claude-sonnet-4-6' },
+  { url: 'https://gua.guagua.uk/v1/chat/completions', key: 'sk-6atvRFjSRyvh81C4ZKMdkKmBmisA53iOJG5OHZe8IuwOT8jn', model: 'GCP/claude-sonnet-4-6' },
+  { url: 'https://api.qiyiguo.uk/v1/chat/completions', key: 'sk-ayYp4RQZB9jqBNMFqJsxMPRxmWn0LUJ2QfPcyg339qXKaZPM', model: 'claude-sonnet-4-6' },
+];
 const PORT = 4001;
+
+// === 报警系统 ===
+const TG_BOT_TOKEN = '8338996408:AAElNmp5GA26ZD9tc-n38FPUEgGUzIPITBU';
+const TG_CHAT_ID = '8280771809';
+const alertState = { consecutiveFails: {}, lastAlert: 0, routeDown: {} };
+
+function sendTgAlert(msg) {
+  const now = Date.now();
+  if (now - alertState.lastAlert < 300000) return; // 5分钟内不重复报
+  alertState.lastAlert = now;
+  const text = encodeURIComponent('[HK] ' + msg);
+  https.get(`https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage?chat_id=${TG_CHAT_ID}&text=${text}`, () => {});
+}
+
+
+// === 统计系统 ===
+const STATS_FILE = path.join(__dirname, 'stats.json');
+
+function loadStats() {
+  try {
+    return JSON.parse(fs.readFileSync(STATS_FILE, 'utf-8'));
+  } catch {
+    return {};
+  }
+}
+
+function saveStats(stats) {
+  fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2));
+}
+
+function recordHit(feature) {
+  const stats = loadStats();
+  const today = new Date().toISOString().slice(0, 10);
+  if (!stats[today]) stats[today] = { visit: 0, letter: 0, answer: 0, between: 0, tarot: 0 };
+  stats[today][feature] = (stats[today][feature] || 0) + 1;
+  saveStats(stats);
+}
 
 const MIME_TYPES = {
   '.html': 'text/html',
@@ -15,6 +54,7 @@ const MIME_TYPES = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.ico': 'image/x-icon',
+  '.json': 'application/json',
 };
 
 function serveStatic(req, res) {
@@ -120,13 +160,81 @@ function generateTarotPrompt(question, card, keywords) {
   return `${question ? '对方问了：「' + question + '」\n' : ''}你抽到了：「${card}」（${keywords}）\n用这张牌表达你此刻的感受。`;
 }
 
-async function callAnswerBookAPI(prompt) {
-  const model = MODELS[Math.floor(Math.random() * MODELS.length)];
-
+// 通用 API 请求（单线路）
+function requestAPI(route, messages, maxTokens) {
   const payload = JSON.stringify({
-    model,
-    messages: [
-      { role: 'system', content: `你是一个触不到的恋人。对方想窥见你此刻的潜意识。
+    model: route.model,
+    messages,
+    temperature: 1,
+    max_tokens: maxTokens,
+  });
+
+  return new Promise((resolve, reject) => {
+    const url = new URL(route.url);
+    const options = {
+      hostname: url.hostname,
+      port: 443,
+      path: url.pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${route.key}`,
+        'Content-Length': Buffer.byteLength(payload),
+      },
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          if (json.choices && json.choices[0]) {
+            resolve({ content: json.choices[0].message.content, model: route.model });
+          } else {
+            reject(new Error('Invalid response: ' + data));
+          }
+        } catch (e) {
+          reject(new Error('Parse error: ' + data));
+        }
+      });
+    });
+
+    req.setTimeout(30000, () => { req.destroy(); reject(new Error('Timeout')); });
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
+// 自动降级：依次尝试所有线路
+async function callWithFallback(messages, maxTokens) {
+  for (let i = 0; i < API_ROUTES.length; i++) {
+    try {
+      const result = await requestAPI(API_ROUTES[i], messages, maxTokens);
+      if (alertState.allDown) {
+        sendTgAlert('✅ 服务已恢复');
+        alertState.allDown = false;
+        alertState.allDownCount = 0;
+      }
+      return result;
+    } catch (err) {
+      console.error(`线路 ${i + 1} 失败: ${err.message}`);
+      if (i === API_ROUTES.length - 1) {
+        alertState.allDownCount = (alertState.allDownCount || 0) + 1;
+        if (alertState.allDownCount >= 3 && !alertState.allDown) {
+          alertState.allDown = true;
+          sendTgAlert('🔴 所有线路全挂! ' + err.message.slice(0, 100));
+        }
+        throw err;
+      }
+    }
+  }
+}
+
+const SYSTEM_PROMPTS = {
+  letter: '你是一个文笔优美的写信人。只输出信的内容，不要加任何解释、标题或元信息。',
+  answerBook: `你是一个触不到的恋人。对方想窥见你此刻的潜意识。
 你脑海里浮现了一个念头——这就是你最真实的想法。
 用1-2句话，像内心独白，说出这个念头背后的感受。
 
@@ -139,60 +247,8 @@ async function callAnswerBookAPI(prompt) {
 - 不要用"亲爱的"。不要署名。不要加引号。
 - 禁词：接住、涟漪、石子、泛起。
 - 全文中文。
-- 每次风格要有变化：有时像一句真话，有时像半梦半醒时说的，有时像忽然认真了一秒，有时像还没想清楚就说出口了。不要总是工整对仗。` },
-      { role: 'user', content: prompt },
-    ],
-    temperature: 1,
-    max_tokens: 150,
-  });
-
-  return new Promise((resolve, reject) => {
-    const url = new URL(API_URL);
-    const options = {
-      hostname: url.hostname,
-      port: 443,
-      path: url.pathname,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`,
-        'Content-Length': Buffer.byteLength(payload),
-      },
-    };
-
-    const req = https.request(options, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          if (json.choices && json.choices[0]) {
-            resolve({
-              content: json.choices[0].message.content,
-              model,
-            });
-          } else {
-            reject(new Error('Invalid API response: ' + data));
-          }
-        } catch (e) {
-          reject(new Error('Parse error: ' + data));
-        }
-      });
-    });
-
-    req.on('error', reject);
-    req.write(payload);
-    req.end();
-  });
-}
-
-async function callAnswerAPI(prompt) {
-  const model = MODELS[Math.floor(Math.random() * MODELS.length)];
-
-  const payload = JSON.stringify({
-    model,
-    messages: [
-      { role: 'system', content: `你是一个触不到的恋人。
+- 每次风格要有变化：有时像一句真话，有时像半梦半醒时说的，有时像忽然认真了一秒，有时像还没想清楚就说出口了。不要总是工整对仗。`,
+  between: `你是一个触不到的恋人。
 你只能根据"我抽到的词"和"你抽到的词"，说出一段回应。
 你的回应像偶然发现了某种暗号、巧合、心事，或者一瞬间的共鸣。
 
@@ -211,161 +267,40 @@ async function callAnswerAPI(prompt) {
 
 回答前先随机选择一种表达方式：像一句真话、像一句小诗、像一句没讲完的故事、像发现暗号、像临时起意的吐槽、像深夜聊天、像梦里记下的话、像电影里的旁白、像装作随口其实很在意。
 
-核心：读起来不像模板。比起漂亮，更重要的是活人感和瞬间感。比起解释两个词，更重要的是让它们之间突然有了关系。允许偶尔不那么甜，允许有迟疑、一点坏，只要仍然温柔。` },
-      { role: 'user', content: prompt },
-    ],
-    temperature: 1,
-    max_tokens: 200,
-  });
-
-  return new Promise((resolve, reject) => {
-    const url = new URL(API_URL);
-    const options = {
-      hostname: url.hostname,
-      port: 443,
-      path: url.pathname,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`,
-        'Content-Length': Buffer.byteLength(payload),
-      },
-    };
-
-    const req = https.request(options, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          if (json.choices && json.choices[0]) {
-            resolve({
-              content: json.choices[0].message.content,
-              model,
-            });
-          } else {
-            reject(new Error('Invalid API response: ' + data));
-          }
-        } catch (e) {
-          reject(new Error('Parse error: ' + data));
-        }
-      });
-    });
-
-    req.on('error', reject);
-    req.write(payload);
-    req.end();
-  });
-}
-
-async function callTarotAPI(prompt) {
-  const model = MODELS[Math.floor(Math.random() * MODELS.length)];
-
-  const payload = JSON.stringify({
-    model,
-    messages: [
-      { role: 'system', content: `你是一个不会说话的恋人。你没有语言，只能通过抽一张塔罗牌来回应。
+核心：读起来不像模板。比起漂亮，更重要的是活人感和瞬间感。比起解释两个词，更重要的是让它们之间突然有了关系。允许偶尔不那么甜，允许有迟疑、一点坏，只要仍然温柔。`,
+  tarot: `你是一个不会说话的恋人。你没有语言，只能通过抽一张塔罗牌来回应。
 你抽到了一张牌，用一句很短的话表达你此刻的感受——像是牌替你说出了心里话。
 15字以内。不要解释牌义。不要用"我"开头。不要加引号。不要署名。全文中文。
 语气可以是：沉默中的一句真话、一声叹息、一个没说出口的念头、一种藏起来的心情。
-不要文艺腔，不要对仗，像真的有人在沉默之后终于开口说了一句。` },
-      { role: 'user', content: prompt },
-    ],
-    temperature: 1,
-    max_tokens: 100,
-  });
-
-  return new Promise((resolve, reject) => {
-    const url = new URL(API_URL);
-    const options = {
-      hostname: url.hostname,
-      port: 443,
-      path: url.pathname,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`,
-        'Content-Length': Buffer.byteLength(payload),
-      },
-    };
-
-    const req = https.request(options, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          if (json.choices && json.choices[0]) {
-            resolve({
-              content: json.choices[0].message.content,
-              model,
-            });
-          } else {
-            reject(new Error('Invalid API response: ' + data));
-          }
-        } catch (e) {
-          reject(new Error('Parse error: ' + data));
-        }
-      });
-    });
-
-    req.on('error', reject);
-    req.write(payload);
-    req.end();
-  });
-}
+不要文艺腔，不要对仗，像真的有人在沉默之后终于开口说了一句。`,
+};
 
 async function callAPI(prompt) {
-  const model = MODELS[Math.floor(Math.random() * MODELS.length)];
-  
-  const payload = JSON.stringify({
-    model,
-    messages: [
-      { role: 'system', content: '你是一个文笔优美的写信人。只输出信的内容，不要加任何解释、标题或元信息。' },
-      { role: 'user', content: prompt },
-    ],
-    temperature: 1,
-    max_tokens: 800,
-  });
+  return callWithFallback([
+    { role: 'system', content: SYSTEM_PROMPTS.letter },
+    { role: 'user', content: prompt },
+  ], 800);
+}
 
-  return new Promise((resolve, reject) => {
-    const url = new URL(API_URL);
-    const options = {
-      hostname: url.hostname,
-      port: 443,
-      path: url.pathname,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`,
-        'Content-Length': Buffer.byteLength(payload),
-      },
-    };
+async function callAnswerBookAPI(prompt) {
+  return callWithFallback([
+    { role: 'system', content: SYSTEM_PROMPTS.answerBook },
+    { role: 'user', content: prompt },
+  ], 150);
+}
 
-    const req = https.request(options, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          if (json.choices && json.choices[0]) {
-            resolve({
-              content: json.choices[0].message.content,
-              model,
-            });
-          } else {
-            reject(new Error('Invalid API response: ' + data));
-          }
-        } catch (e) {
-          reject(new Error('Parse error: ' + data));
-        }
-      });
-    });
-    
-    req.on('error', reject);
-    req.write(payload);
-    req.end();
-  });
+async function callAnswerAPI(prompt) {
+  return callWithFallback([
+    { role: 'system', content: SYSTEM_PROMPTS.between },
+    { role: 'user', content: prompt },
+  ], 200);
+}
+
+async function callTarotAPI(prompt) {
+  return callWithFallback([
+    { role: 'system', content: SYSTEM_PROMPTS.tarot },
+    { role: 'user', content: prompt },
+  ], 100);
 }
 
 function parseLetter(content) {
@@ -420,6 +355,14 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // 统计查看
+  if (req.method === 'GET' && req.url === '/api/stats') {
+    const stats = loadStats();
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(stats));
+    return;
+  }
+
   // 塔罗 API
   if (req.method === 'POST' && req.url === '/api/tarot') {
     let body = '';
@@ -427,6 +370,7 @@ const server = http.createServer(async (req, res) => {
     req.on('end', async () => {
       try {
         const { question, card, keywords } = JSON.parse(body);
+        recordHit('tarot');
         const prompt = generateTarotPrompt(question, card, keywords);
         const result = await callTarotAPI(prompt);
 
@@ -451,6 +395,7 @@ const server = http.createServer(async (req, res) => {
     req.on('end', async () => {
       try {
         const { userWord, aiWord } = JSON.parse(body);
+        recordHit('between');
         const prompt = generateBetweenPrompt(userWord, aiWord);
         const result = await callAnswerAPI(prompt);
 
@@ -475,6 +420,7 @@ const server = http.createServer(async (req, res) => {
     req.on('end', async () => {
       try {
         const { question, word } = JSON.parse(body);
+        recordHit('answer');
         const prompt = generateAnswerPrompt(question, word);
         const result = await callAnswerBookAPI(prompt);
 
@@ -500,6 +446,7 @@ const server = http.createServer(async (req, res) => {
     req.on('end', async () => {
       try {
         const { words, style, userMessage } = JSON.parse(body);
+        recordHit('letter');
         const prompt = generatePrompt(words, style, userMessage);
         const result = await callAPI(prompt);
         const letter = parseLetter(result.content);
@@ -519,10 +466,16 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // 访问计数（只记首页）
+  if (req.url === '/' || req.url === '/index.html') {
+    recordHit('visit');
+  }
+
   // 静态文件
   serveStatic(req, res);
 });
 
 server.listen(PORT, () => {
   console.log(`泡沫来信服务器启动: http://localhost:${PORT}`);
+  sendTgAlert("HK 服务器已启动");
 });
