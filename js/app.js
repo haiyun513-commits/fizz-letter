@@ -13,8 +13,15 @@ document.addEventListener('DOMContentLoaded', () => {
     tarotInput: document.getElementById('screen-tarot-input'),
     tarotLoading: document.getElementById('screen-tarot-loading'),
     tarotResult: document.getElementById('screen-tarot-result'),
+    divination: document.getElementById("screen-divination"),
+    lenormandInput: document.getElementById("screen-lenormand-input"),
+    lenormandLoading: document.getElementById("screen-lenormand-loading"),
+    lenormandResult: document.getElementById("screen-lenormand-result"),
     mailbox: document.getElementById('screen-mailbox'),
     settings: document.getElementById('screen-settings'),
+    mailboxHome: document.getElementById('screen-mailbox-home'),
+    penpalCreate: document.getElementById('screen-penpal-create'),
+    penpalDetail: document.getElementById('screen-penpal-detail'),
   };
 
   const bubbleContainer = document.getElementById('bubble-container');
@@ -201,21 +208,25 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // === 信箱 ===
-  const TYPE_LABELS = { letter: '来信', answer: '答案', between: '语言之间', tarot: '塔罗' };
-  let mailboxLetters = []; // 存储信件数据
+  const TYPE_LABELS = { letter: '来信', answer: '答案', between: '语言之间', tarot: '塔罗', lenormand: '雷诺曼' };
+  let mailboxLetters = [];
+  let currentMailboxIndex = -1; // 存储信件数据
 
   document.getElementById('btn-mailbox').addEventListener('click', () => {
-    showScreen('mailbox');
-    loadMailbox();
+    showScreen('mailboxHome');
+    PenPal.loadMailbox();
   });
 
   document.getElementById('btn-mailbox-back').addEventListener('click', () => {
-    showScreen('welcome');
+    showScreen('mailboxHome');
+    PenPal.loadMailbox();
   });
 
-  // 详情返回信箱列表
+  // 详情返回 → 回到泡沫邮箱首页
   document.getElementById('btn-detail-back').addEventListener('click', () => {
     document.getElementById('mailbox-detail').style.display = 'none';
+    showScreen('mailboxHome');
+    PenPal.loadMailbox();
   });
 
   async function loadMailbox() {
@@ -247,10 +258,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         const meta = l.metadata || {};
         let metaHint = '';
-        if (meta.words) metaHint = meta.words.join(' · ');
-        if (meta.card) metaHint = meta.card;
+        const userQ = meta.question || meta.userMessage || '';
+        if (userQ) metaHint = userQ.length > 20 ? userQ.slice(0, 20) + '...' : userQ;
+        else if (meta.words) metaHint = meta.words.join(' · ');
+        if (meta.card) metaHint = (metaHint ? metaHint + ' · ' : '') + meta.card;
         if (meta.userWord && meta.aiWord) metaHint = meta.userWord + ' × ' + meta.aiWord;
-        if (meta.word) metaHint = '「' + meta.word + '」';
+        if (meta.word && !userQ) metaHint = '「' + meta.word + '」';
         return '<div class="mailbox-item" onclick="openMailboxDetail(' + i + ')">' +
           '<div class="mailbox-item-header">' +
           '<span class="mailbox-item-type">' + (TYPE_LABELS[l.type] || l.type) + '</span>' +
@@ -267,40 +280,112 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 打开信箱详情 — 还原原始展示样式
   window.openMailboxDetail = function(index) {
+    currentMailboxIndex = index;
     const l = mailboxLetters[index];
     if (!l) return;
     const detail = document.getElementById('mailbox-detail');
     const content = document.getElementById('mailbox-detail-content');
     const meta = l.metadata || {};
 
+    // 用户卡片（统一样式，放在 AI 卡片下方）
+    function userCard(text) {
+      if (!text) return '';
+      return '<div class="mailbox-user-card"><div class="mailbox-user-card-text">' + text.replace(/</g, '&lt;') + '</div></div>';
+    }
+
     if (l.type === 'letter') {
-      // 还原信纸样式
       const paragraphs = l.content.split('\n').filter(p => p.trim()).map(p => '<p>' + p + '</p>').join('');
-      content.innerHTML = '<div class="letter-paper template-parchment"><div class="letter-body reveal">' + paragraphs + '</div></div>';
+      content.innerHTML =
+        '<div class="letter-paper template-parchment"><div class="letter-body reveal">' + paragraphs + '</div></div>' +
+        userCard(meta.userMessage);
     } else if (l.type === 'answer') {
-      // 还原答案之书样式
       const word = meta.word || '?';
-      content.innerHTML = '<div class="answer-result-card">' +
+      const answerQ = meta.question || '';
+      content.innerHTML =
+        '<div class="answer-result-card">' +
         '<div class="answer-word">「' + word + '」</div>' +
         '<div class="answer-response">' + l.content + '</div>' +
-        '</div>';
+        '</div>' +
+        userCard(answerQ);
     } else if (l.type === 'tarot') {
-      // 还原塔罗样式 — 从 TAROT_CARDS 查找卡牌图片
       const cardName = meta.card || '';
+      const reversed = meta.reversed || false;
       const card = typeof TAROT_CARDS !== 'undefined' ? TAROT_CARDS.find(c => c.name === cardName) : null;
       const imgSrc = card ? 'images/tarot/' + encodeURIComponent(card.image) : '';
       const enName = card ? card.en : '';
       const keywords = meta.keywords || (card ? card.keywords : '');
-      content.innerHTML = '<div class="tarot-result-stage">' +
-        (imgSrc ? '<img class="tarot-card-img" src="' + imgSrc + '" alt="' + cardName + '">' : '') +
+      const tarotQ = meta.question || '';
+      const imgStyle = reversed ? ' style="transform:rotate(180deg)"' : '';
+      const posLabel = reversed ? ' · 逆位' : ' · 正位';
+      const enPos = reversed ? ' (Reversed)' : '';
+      content.innerHTML =
+        '<div class="tarot-result-stage">' +
+        (imgSrc ? '<img class="tarot-card-img" src="' + imgSrc + '" alt="' + cardName + '"' + imgStyle + '>' : '') +
         '<div class="tarot-card-info">' +
-        '<div class="tarot-name">' + cardName + '</div>' +
-        '<div class="tarot-name-en">' + enName + '</div>' +
+        '<div class="tarot-name">' + cardName + posLabel + '</div>' +
+        '<div class="tarot-name-en">' + enName + enPos + '</div>' +
         '<div class="tarot-keywords">' + keywords + '</div>' +
         '</div>' +
         '<div class="tarot-mood show">' + l.content + '</div>' +
-        '</div>';
-    } else if (l.type === 'between') {
+        '</div>' +
+        userCard(tarotQ);
+    } else if (l.type === 'lenormand') {
+      const card1Name = meta.card1 || '';
+      const card2Name = meta.card2 || '';
+      const card3Name = meta.card3 || '';
+      const c1 = typeof LENORMAND_CARDS !== 'undefined' ? LENORMAND_CARDS.find(c => c.name === card1Name) : null;
+      const c2 = typeof LENORMAND_CARDS !== 'undefined' ? LENORMAND_CARDS.find(c => c.name === card2Name) : null;
+      const c3 = typeof LENORMAND_CARDS !== 'undefined' ? LENORMAND_CARDS.find(c => c.name === card3Name) : null;
+      const img1 = c1 ? 'images/lenormand/' + encodeURIComponent(c1.image) : '';
+      const img2 = c2 ? 'images/lenormand/' + encodeURIComponent(c2.image) : '';
+      const img3 = c3 ? 'images/lenormand/' + encodeURIComponent(c3.image) : '';
+      const en1 = c1 ? c1.en : '';
+      const en2 = c2 ? c2.en : '';
+      const en3 = c3 ? c3.en : '';
+      const kw1 = meta.keywords1 || '';
+      const kw2 = meta.keywords2 || '';
+      const kw3 = meta.keywords3 || '';
+      const lnmQ = meta.question || '';
+      content.innerHTML =
+        '<div class="lenormand-result-stage">' +
+        '<div class="lenormand-cards-display">' +
+        '<div class="lenormand-card">' +
+        (img1 ? '<img class="lenormand-card-img" src="' + img1 + '" alt="' + card1Name + '">' : '') +
+        '<div class="lenormand-card-name">' + card1Name + '</div>' +
+        '<div class="lenormand-card-name-en">' + en1 + '</div>' +
+        '<div class="lenormand-card-keywords">' + kw1 + '</div>' +
+        '</div>' +
+        '<div class="lenormand-card-connector">+</div>' +
+        '<div class="lenormand-card">' +
+        (img2 ? '<img class="lenormand-card-img" src="' + img2 + '" alt="' + card2Name + '">' : '') +
+        '<div class="lenormand-card-name">' + card2Name + '</div>' +
+        '<div class="lenormand-card-name-en">' + en2 + '</div>' +
+        '<div class="lenormand-card-keywords">' + kw2 + '</div>' +
+        '</div>' +
+        '<div class="lenormand-card-connector">+</div>' +
+        '<div class="lenormand-card">' +
+        (img3 ? '<img class="lenormand-card-img" src="' + img3 + '" alt="' + card3Name + '">' : '') +
+        '<div class="lenormand-card-name">' + card3Name + '</div>' +
+        '<div class="lenormand-card-name-en">' + en3 + '</div>' +
+        '<div class="lenormand-card-keywords">' + kw3 + '</div>' +
+        '</div>' +
+        '</div>' +
+        '<div class="lenormand-reading show">' + l.content + '</div>' +
+        '</div>' +
+        userCard(lnmQ);
+    } else if (l.type === 'wordcard') {
+      const q = meta.question || '（无题）';
+      const lines = l.content.split('\n').filter(Boolean);
+      let html = '<div class="wordcard-archive">';
+      if (q !== '（无题）') html += '<div class="wordcard-archive-question">' + q + '</div>';
+      lines.forEach(line => {
+        const words = line.split(' · ');
+        html += '<div class="wordcard-archive-round">';
+        words.forEach(w => { html += '<div class="wordcard-bubble">' + w + '</div>'; });
+        html += '</div>';
+      });
+      html += '</div>';
+      content.innerHTML = html + userCard(q);
       // 还原语言之间样式
       const userWord = meta.userWord || '?';
       const aiWord = meta.aiWord || '?';
@@ -321,8 +406,24 @@ document.addEventListener('DOMContentLoaded', () => {
         '</div>';
     }
 
+    showScreen('mailbox');
     detail.style.display = 'flex';
   };
+
+  // 删除信箱条目
+  document.getElementById('btn-detail-delete').addEventListener('click', async () => {
+    if (currentMailboxIndex < 0) return;
+    const l = mailboxLetters[currentMailboxIndex];
+    if (!l) return;
+    if (!await FizzUI.confirm('确定要删除这条记录吗？', {danger: true, confirmText: '删除'})) return;
+    try {
+      await Auth.deleteFromMailbox(l.id);
+      document.getElementById('mailbox-detail').style.display = 'none';
+      loadMailbox();
+    } catch (err) {
+      FizzUI.toast('删除失败', 'error');
+    }
+  });
 
   // 兑换码弹窗
   document.getElementById('btn-redeem').addEventListener('click', () => {
@@ -350,6 +451,203 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 1500);
     } catch (err) {
       errorEl.textContent = err.message;
+    }
+  });
+
+
+  // ═══ 信友系统事件 ═══
+
+  // Mailbox home → back to welcome
+  document.getElementById('btn-mailbox-home-back').addEventListener('click', () => {
+    showScreen('welcome');
+  });
+
+  // Add new pen pal (from letter conversion, not direct)
+  // btn-add-penpal removed from UI
+
+  // Create pen pal screen → back
+  document.getElementById('btn-create-back').addEventListener('click', () => {
+    showScreen('mailboxHome');
+    PenPal.loadMailbox();
+  });
+
+  // Name input char count
+  document.getElementById('penpal-name-input').addEventListener('input', (e) => {
+    document.getElementById('penpal-name-count').textContent = e.target.value.length;
+  });
+
+  // Do create pen pal (with optional initial letter from "回一封信")
+  document.getElementById('btn-do-create').addEventListener('click', async () => {
+    const name = document.getElementById('penpal-name-input').value;
+    if (!name.trim()) return;
+    const initialLetter = window._pendingInitialLetter || null;
+    window._pendingInitialLetter = null;
+    const pp = await PenPal.createPenPal(name, initialLetter);
+    if (pp) {
+      showScreen('penpalDetail');
+      PenPal.loadDetail(pp.id);
+    }
+  });
+
+  // Detail → back to mailbox home
+  document.getElementById('btn-detail-back-home').addEventListener('click', () => {
+    PenPal.stopPolling();
+    showScreen('mailboxHome');
+    PenPal.loadMailbox();
+  });
+
+  // Tab switching
+  document.getElementById('tab-letters').addEventListener('click', () => PenPal.switchTab('letters'));
+  document.getElementById('tab-fragments').addEventListener('click', () => PenPal.switchTab('fragments'));
+
+  // Letter input char count
+  document.getElementById('letter-input').addEventListener('input', (e) => {
+    document.getElementById('letter-char-count').textContent = e.target.value.length;
+  });
+
+  // Send letter
+  document.getElementById('btn-send-letter').addEventListener('click', () => {
+    const content = document.getElementById('letter-input').value;
+    if (PenPal.currentPenPalId && content.trim()) {
+      PenPal.sendLetter(PenPal.currentPenPalId, content);
+    }
+  });
+
+  // Send fragment
+  document.getElementById('btn-send-fragment').addEventListener('click', () => {
+    const content = document.getElementById('fragment-input').value;
+    if (PenPal.currentPenPalId && (content.trim() || PenPal.fragmentImage)) {
+      PenPal.sendFragment(PenPal.currentPenPalId, content);
+    }
+  });
+
+  // Instant letter (一念即达)
+  document.getElementById('btn-instant-letter').addEventListener('click', () => {
+    const content = document.getElementById('letter-input').value;
+    if (PenPal.currentPenPalId) {
+      PenPal.sendLetter(PenPal.currentPenPalId, content, true);
+    }
+  });
+
+  // Instant fragment (一念即达)
+  document.getElementById('btn-instant-fragment').addEventListener('click', () => {
+    console.log('[DEBUG] 一念即达 clicked, penPalId:', PenPal.currentPenPalId, 'content:', document.getElementById('fragment-input').value, 'image:', !!PenPal.fragmentImage);
+    const content = document.getElementById('fragment-input').value;
+    if (PenPal.currentPenPalId) {
+      PenPal.sendFragment(PenPal.currentPenPalId, content, true);
+    } else {
+      console.log('[DEBUG] 条件不满足: penPalId=', PenPal.currentPenPalId, 'content=', content.trim(), 'image=', PenPal.fragmentImage);
+    }
+  });
+
+  // Init fragment image upload
+  PenPal.initFragmentImage();
+
+  // Pen pal detail menu
+  document.getElementById('btn-penpal-menu').addEventListener('click', () => {
+    const popup = document.getElementById('penpal-menu-popup');
+    popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
+  });
+
+  // Close popup on outside click
+  document.addEventListener('click', (e) => {
+    const popup = document.getElementById('penpal-menu-popup');
+    if (popup && popup.style.display !== 'none' &&
+        !e.target.closest('#penpal-menu-popup') &&
+        !e.target.closest('#btn-penpal-menu')) {
+      popup.style.display = 'none';
+    }
+  });
+
+  // Archive pen pal
+  document.getElementById('btn-archive-penpal').addEventListener('click', async () => {
+    document.getElementById('penpal-menu-popup').style.display = 'none';
+    if (PenPal.currentPenPalId) {
+      if (await FizzUI.confirm('确定要归档这位信友吗？')) {
+        const ok = await PenPal.archivePenPal(PenPal.currentPenPalId);
+        if (ok) {
+          showScreen('mailboxHome');
+          PenPal.loadMailbox();
+        }
+      }
+    }
+  });
+
+  document.getElementById('btn-delete-penpal').addEventListener('click', async () => {
+    document.getElementById('penpal-menu-popup').style.display = 'none';
+    if (PenPal.currentPenPalId) {
+      if (await FizzUI.confirm('确定要删除这位信友吗？\n所有信件和碎片都会被永久删除，无法恢复。', {danger: true, confirmText: '删除'})) {
+        const ok = await PenPal.deletePenPal(PenPal.currentPenPalId);
+        if (ok) {
+          showScreen('mailboxHome');
+          PenPal.loadMailbox();
+        }
+      }
+    }
+  });
+
+  document.getElementById('btn-empty-start').addEventListener('click', () => {
+    showScreen('letter');
+    if (typeof generateLetter === 'function') generateLetter();
+  });
+
+  // Archive toggle
+  document.getElementById('archive-toggle').addEventListener('click', () => {
+    const toggle = document.getElementById('archive-toggle');
+    const list = document.getElementById('archive-list');
+    const isOpen = list.style.display !== 'none';
+    list.style.display = isOpen ? 'none' : 'block';
+    toggle.classList.toggle('open', !isOpen);
+  });
+
+  // Mail settings modal
+  document.getElementById('btn-mail-settings').addEventListener('click', () => {
+    document.getElementById('mail-settings-modal').style.display = 'flex';
+    PenPal.loadSettings();
+  });
+
+  document.getElementById('mail-settings-close').addEventListener('click', () => {
+    document.getElementById('mail-settings-modal').style.display = 'none';
+  });
+
+  document.getElementById('mail-settings-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'mail-settings-modal') e.target.style.display = 'none';
+  });
+
+  document.getElementById('email-notify-toggle').addEventListener('change', (e) => {
+    PenPal.saveSettings({ email_notify: e.target.checked });
+  });
+
+  // Global navigation helper for PenPal module
+  window._showPenPalDetail = function(penPalId) {
+    showScreen('penpalDetail');
+    PenPal.loadDetail(penPalId);
+  };
+
+  // Legacy detail viewer for old mailbox items
+  window._showLegacyDetail = async function(item) {
+    showScreen('mailbox');
+    // Load mailbox data first (needed for openMailboxDetail)
+    if (!mailboxLetters || mailboxLetters.length === 0) {
+      try { mailboxLetters = await Auth.getMailbox() || []; } catch { mailboxLetters = []; }
+    }
+    const index = mailboxLetters.findIndex(l => l.id === item.id);
+    if (index >= 0) {
+      openMailboxDetail(index);
+    }
+  };
+
+  // Allow Enter key to create pen pal
+  document.getElementById('penpal-name-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      document.getElementById('btn-do-create').click();
+    }
+  });
+
+  // Allow Enter key (with Ctrl/Cmd) to send letter
+  document.getElementById('letter-input').addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      document.getElementById('btn-send-letter').click();
     }
   });
 
@@ -477,7 +775,10 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // 生成信件（先调API，失败则用预写的）
+  let _generatingLetter = false;
   async function generateLetter(words, userMessage) {
+    if (_generatingLetter) return;
+    _generatingLetter = true;
     showScreen('loading');
     const style = detectStyle(words);
     const template = getLetterTemplate(style);
@@ -511,6 +812,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const letter = getRandomLetter(style, userMessage);
       displayLetter(letter);
       Auth.saveToMailbox('letter', letter.body, { words, userMessage: userMessage || undefined });
+    } finally {
+      _generatingLetter = false;
     }
   }
 
@@ -669,6 +972,21 @@ document.addEventListener('DOMContentLoaded', () => {
     saveCanvasImage(canvas, `fizz-letter-${Date.now()}.png`);
   });
 
+  // 回一封信 — 用当前信件内容创建信友
+  document.getElementById('btn-reply-letter').addEventListener('click', () => {
+    if (!Auth.isLoggedIn()) {
+      document.getElementById('auth-modal').style.display = 'flex';
+      return;
+    }
+    // Get the letter content
+    const letterBody = document.getElementById('letter-body').innerText || '';
+    // Go to create screen with letter stored
+    showScreen('penpalCreate');
+    document.getElementById('penpal-name-input').value = '';
+    document.getElementById('penpal-name-count').textContent = '0';
+    window._pendingInitialLetter = letterBody.trim();
+  });
+
   // 再来一次
   document.getElementById('btn-restart').addEventListener('click', () => {
     manager.reset();
@@ -695,7 +1013,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // 翻开答案
+  let _flippingAnswer = false;
   document.getElementById('btn-flip-answer').addEventListener('click', async () => {
+    if (_flippingAnswer) return;
+    _flippingAnswer = true;
+    const btn = document.getElementById('btn-flip-answer');
+    btn.disabled = true;
     const question = document.getElementById('answer-question').value;
     showScreen('answerLoading');
 
@@ -704,13 +1027,16 @@ document.addEventListener('DOMContentLoaded', () => {
       // 翻书动画至少显示 1.5 秒
       await new Promise(r => setTimeout(r, 1500));
       displayAnswer(result);
-      Auth.saveToMailbox('answer', result.response, { word: result.word });
+      Auth.saveToMailbox('answer', result.response, { word: result.word, question: question || undefined });
     } catch (err) {
       console.log('Answer API unavailable, using fallback:', err.message);
       await new Promise(r => setTimeout(r, 1200));
       const result = answerBook.getFallbackAnswer(question);
       displayAnswer(result);
-      Auth.saveToMailbox('answer', result.response, { word: result.word });
+      Auth.saveToMailbox('answer', result.response, { word: result.word, question: question || undefined });
+    } finally {
+      _flippingAnswer = false;
+      document.getElementById('btn-flip-answer').disabled = false;
     }
   });
 
@@ -1191,14 +1517,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const tarotDeck = new TarotDeck();
 
   // 进入塔罗
-  document.getElementById('btn-tarot').addEventListener('click', () => {
-    document.getElementById('tarot-question').value = '';
-    showScreen('tarotInput');
+  // 进入占卜选择
+  document.getElementById("btn-tarot").addEventListener("click", () => {
+    showScreen("divination");
   });
+
+
+
+
 
   // 返回
   document.getElementById('btn-tarot-back').addEventListener('click', () => {
-    showScreen('welcome');
+    showScreen('divination');
   });
 
   // 抽牌
@@ -1215,23 +1545,28 @@ document.addEventListener('DOMContentLoaded', () => {
       await new Promise(r => setTimeout(r, 2000));
       const mood = await moodPromise;
       displayTarot(card, mood);
-      Auth.saveToMailbox('tarot', mood, { card: card.name, keywords: card.keywords });
+      Auth.saveToMailbox('tarot', mood, { card: card.name, keywords: card.keywords, reversed: card.reversed, question: question || undefined });
     } catch (err) {
       console.log('Tarot API unavailable, using fallback:', err.message);
       await new Promise(r => setTimeout(r, 1500));
       const mood = tarotDeck.getFallbackMood();
       displayTarot(card, mood);
-      Auth.saveToMailbox('tarot', mood, { card: card.name, keywords: card.keywords });
+      Auth.saveToMailbox('tarot', mood, { card: card.name, keywords: card.keywords, reversed: card.reversed, question: question || undefined });
     }
   });
 
   function displayTarot(card, mood) {
     const img = document.getElementById('tarot-card-img');
+    // 先隐藏图片，设好 transform，等加载完再显示（避免正→逆闪烁）
+    img.style.opacity = '0';
+    img.style.transform = card.reversed ? 'rotate(180deg)' : '';
     img.src = 'images/tarot/' + encodeURIComponent(card.image);
     img.alt = card.name;
+    const showImg = () => { img.style.opacity = ''; };
+    if (img.complete) showImg(); else img.onload = showImg;
 
-    document.getElementById('tarot-name').textContent = card.name;
-    document.getElementById('tarot-name-en').textContent = card.en;
+    document.getElementById('tarot-name').textContent = card.name + (card.reversed ? ' · 逆位' : ' · 正位');
+    document.getElementById('tarot-name-en').textContent = card.en + (card.reversed ? ' (Reversed)' : '');
     document.getElementById('tarot-keywords').textContent = card.keywords;
 
     const moodEl = document.getElementById('tarot-mood');
@@ -1241,8 +1576,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const footer = document.querySelector('.tarot-footer');
     footer.classList.remove('show');
 
-    // 重置动画
-    document.querySelectorAll('.tarot-card-img, .tarot-name, .tarot-name-en, .tarot-keywords').forEach(el => {
+    // 重置动画（跳过图片，图片用 onload 控制）
+    document.querySelectorAll('.tarot-name, .tarot-name-en, .tarot-keywords').forEach(el => {
       el.style.animation = 'none';
       void el.offsetHeight;
       el.style.animation = '';
@@ -1366,4 +1701,416 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     imgEl.src = cardImg.src;
   });
-});
+
+  // ===== 占卜选择屏 =====
+  document.getElementById("btn-divination-back").addEventListener("click", () => {
+    showScreen("welcome");
+  });
+  document.getElementById("btn-pick-tarot").addEventListener("click", () => {
+    document.getElementById("tarot-question").value = "";
+    showScreen("tarotInput");
+  });
+  document.getElementById("btn-pick-lenormand").addEventListener("click", () => {
+    document.getElementById("lenormand-question").value = "";
+    showScreen("lenormandInput");
+  });
+
+  // ===== 雷诺曼 =====
+  const lenormandDeck = new LenormandDeck();
+
+  document.getElementById("btn-lenormand-back").addEventListener("click", () => {
+    showScreen("divination");
+  });
+
+  document.getElementById("btn-lenormand-draw").addEventListener("click", async () => {
+    const question = document.getElementById("lenormand-question").value;
+    showScreen("lenormandLoading");
+
+    const cards = lenormandDeck.drawCards(3);
+
+    try {
+      const readingPromise = lenormandDeck.getReading(question);
+      await new Promise(r => setTimeout(r, 2500));
+      const reading = await readingPromise;
+      displayLenormand(cards, reading, question);
+      Auth.saveToMailbox("lenormand", reading, { card1: cards[0].name, card2: cards[1].name, card3: cards[2].name, keywords1: cards[0].keywords, keywords2: cards[1].keywords, keywords3: cards[2].keywords, question: question || undefined });
+    } catch (err) {
+      console.log("Lenormand API unavailable, using fallback:", err.message);
+      await new Promise(r => setTimeout(r, 1500));
+      const reading = lenormandDeck.getFallbackReading();
+      displayLenormand(cards, reading, question);
+      Auth.saveToMailbox("lenormand", reading, { card1: cards[0].name, card2: cards[1].name, card3: cards[2].name, keywords1: cards[0].keywords, keywords2: cards[1].keywords, keywords3: cards[2].keywords, question: question || undefined });
+    }
+  });
+
+  function displayLenormand(cards, reading, question) {
+    const img1 = document.getElementById("lnm-img-1");
+    img1.src = "images/lenormand/" + encodeURIComponent(cards[0].image);
+    img1.alt = cards[0].name;
+    document.getElementById("lnm-name-1").textContent = cards[0].name;
+    document.getElementById("lnm-name-en-1").textContent = cards[0].en;
+    document.getElementById("lnm-keywords-1").textContent = cards[0].keywords;
+
+    const img2 = document.getElementById("lnm-img-2");
+    img2.src = "images/lenormand/" + encodeURIComponent(cards[1].image);
+    img2.alt = cards[1].name;
+    document.getElementById("lnm-name-2").textContent = cards[1].name;
+    document.getElementById("lnm-name-en-2").textContent = cards[1].en;
+    document.getElementById("lnm-keywords-2").textContent = cards[1].keywords;
+
+    const img3 = document.getElementById("lnm-img-3");
+    img3.src = "images/lenormand/" + encodeURIComponent(cards[2].image);
+    img3.alt = cards[2].name;
+    document.getElementById("lnm-name-3").textContent = cards[2].name;
+    document.getElementById("lnm-name-en-3").textContent = cards[2].en;
+    document.getElementById("lnm-keywords-3").textContent = cards[2].keywords;
+
+    const readingEl = document.getElementById("lenormand-reading");
+    readingEl.textContent = reading;
+    readingEl.classList.remove("show");
+
+    const footer = document.querySelector(".lenormand-footer");
+    footer.classList.remove("show");
+
+    // Reset whisper
+    const whisperEl = document.getElementById("lenormand-whisper");
+    whisperEl.textContent = "";
+    whisperLoaded = false;
+    whisperEl.classList.remove("show");
+    const whisperSection = document.getElementById("lenormand-whisper-section");
+    whisperSection.classList.remove("show");
+
+    showScreen("lenormandResult");
+
+    setTimeout(() => readingEl.classList.add("show"), 1200);
+    setTimeout(() => footer.classList.add("show"), 1600);
+    setTimeout(() => whisperSection.classList.add("show"), 2000);
+  }
+
+
+  // 悄悄话
+  // 悄悄话
+  let whisperLoaded = false;
+  document.getElementById("btn-lenormand-whisper").addEventListener("click", async () => {
+    const btn = document.getElementById("btn-lenormand-whisper");
+    const whisperEl = document.getElementById("lenormand-whisper");
+
+    // 已生成 → 折叠/展开
+    if (whisperLoaded) {
+      if (whisperEl.classList.contains("show")) {
+        whisperEl.classList.remove("show");
+      } else {
+        whisperEl.classList.add("show");
+      }
+      return;
+    }
+
+    if (btn.disabled) return;
+    btn.disabled = true;
+    btn.textContent = "TA 在说...";
+
+    const cards = lenormandDeck.currentCards;
+    const question = document.getElementById("lenormand-question").value;
+
+    try {
+      const res = await fetch("/api/lenormand", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: question || "",
+          cards: cards.map(c => ({ name: c.name, keywords: c.keywords, modifier: c.modifier })),
+          mode: "whisper",
+        }),
+      });
+      const data = await res.json();
+      whisperEl.textContent = data.reading || "……";
+    } catch (err) {
+      whisperEl.textContent = "信号不太好，TA 的话没传过来。";
+    }
+    setTimeout(() => whisperEl.classList.add("show"), 100);
+    whisperLoaded = true;
+    btn.textContent = "悄悄话";
+    btn.disabled = false;
+  });
+  document.getElementById("btn-lenormand-again").addEventListener("click", () => {
+    document.getElementById("lenormand-question").value = "";
+    showScreen("lenormandInput");
+  });
+
+  document.getElementById("btn-lenormand-home").addEventListener("click", () => {
+    showScreen("welcome");
+  });
+
+  document.getElementById("btn-lenormand-save").addEventListener("click", () => {
+    const cards = lenormandDeck.currentCards;
+    const reading = lenormandDeck.currentReading;
+    const question = document.getElementById("lenormand-question").value;
+
+    });
+
+    const isDark = currentTheme === "dark";
+    const canvasW = 600;
+    const canvasH = 750;
+    const dpr = 3;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = canvasW * dpr;
+    canvas.height = canvasH * dpr;
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+
+    if (isDark) {
+      const grad = ctx.createLinearGradient(0, 0, 0, canvasH);
+      grad.addColorStop(0, "#050608");
+      grad.addColorStop(0.5, "#081018");
+      grad.addColorStop(1, "#050608");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvasW, canvasH);
+    } else {
+      const grad = ctx.createLinearGradient(0, 0, canvasW, canvasH);
+      grad.addColorStop(0, "#e8ecf1");
+      grad.addColorStop(0.5, "#eef0f4");
+      grad.addColorStop(1, "#e4e8ee");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvasW, canvasH);
+    }
+
+    let loaded = 0;
+    const cimg1 = new Image();
+    const cimg2 = new Image();
+    const cimg3 = new Image();
+    cimg1.crossOrigin = "anonymous";
+    cimg2.crossOrigin = "anonymous";
+    cimg3.crossOrigin = "anonymous";
+
+    function drawWhenReady() {
+      loaded++;
+      if (loaded < 3) return;
+
+      const cardW = 130;
+      const gap = 24;
+      const totalW = cardW * 3 + gap * 2;
+      const startX = (canvasW - totalW) / 2;
+      const cardY = 50;
+
+      const h1 = cardW * (cimg1.naturalHeight / cimg1.naturalWidth);
+      ctx.save();
+      ctx.beginPath();
+      ctx.roundRect(startX, cardY, cardW, h1, 10);
+      ctx.clip();
+      ctx.drawImage(cimg1, startX, cardY, cardW, h1);
+      ctx.restore();
+
+      const h2 = cardW * (cimg2.naturalHeight / cimg2.naturalWidth);
+      const x2 = startX + cardW + gap;
+      ctx.save();
+      ctx.beginPath();
+      ctx.roundRect(x2, cardY, cardW, h2, 10);
+      ctx.clip();
+      ctx.drawImage(cimg2, x2, cardY, cardW, h2);
+      ctx.restore();
+
+      const h3 = cardW * (cimg3.naturalHeight / cimg3.naturalWidth);
+      const x3 = x2 + cardW + gap;
+      ctx.save();
+      ctx.beginPath();
+      ctx.roundRect(x3, cardY, cardW, h3, 10);
+      ctx.clip();
+      ctx.drawImage(cimg3, x3, cardY, cardW, h3);
+      ctx.restore();
+
+      // + connectors
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "20px 'Dancing Script', cursive";
+      ctx.fillStyle = isDark ? "rgba(200,198,198,0.3)" : "rgba(60,70,90,0.3)";
+      const maxH = Math.max(h1, h2, h3);
+      ctx.fillText("+", startX + cardW + gap / 2, cardY + maxH / 2);
+      ctx.fillText("+", x2 + cardW + gap / 2, cardY + maxH / 2);
+
+      const infoY = cardY + maxH + 30;
+      ctx.textBaseline = "top";
+      ctx.font = '20px "LXGW WenKai", "Noto Serif SC", serif';
+      ctx.fillStyle = isDark ? "rgba(200,198,198,0.9)" : "rgba(60,70,90,0.9)";
+      ctx.fillText(cards[0].name + " + " + cards[1].name + " + " + cards[2].name, canvasW / 2, infoY);
+
+      ctx.font = '12px "Dancing Script", cursive';
+      ctx.fillStyle = isDark ? "rgba(200,198,198,0.4)" : "rgba(80,90,110,0.4)";
+      ctx.fillText(cards[0].en + " · " + cards[1].en + " · " + cards[2].en, canvasW / 2, infoY + 28);
+
+      ctx.font = '16px "Noto Serif SC", serif';
+      ctx.fillStyle = isDark ? "rgba(200,198,198,0.65)" : "rgba(80,90,110,0.65)";
+      const maxW = canvasW - 100;
+      const lines = [];
+      let line = "";
+      for (const ch of reading) {
+        const test = line + ch;
+        if (ctx.measureText(test).width > maxW) { lines.push(line); line = ch; }
+        else { line = test; }
+      }
+      if (line) lines.push(line);
+      const readY = infoY + 60;
+      lines.forEach((l, i) => { ctx.fillText(l, canvasW / 2, readY + i * 28); });
+
+      ctx.font = '10px "Noto Serif SC", serif';
+      ctx.fillStyle = isDark ? "rgba(200,198,198,0.15)" : "rgba(60,70,90,0.15)";
+      ctx.fillText("泡沫来信 · 雷诺曼", canvasW / 2, canvasH - 32);
+
+      saveCanvasImage(canvas, "lenormand-" + Date.now() + ".png");
+    }
+
+    cimg1.onload = drawWhenReady;
+    cimg2.onload = drawWhenReady;
+    cimg3.onload = drawWhenReady;
+    cimg1.src = "images/lenormand/" + encodeURIComponent(cards[0].image);
+    cimg2.src = "images/lenormand/" + encodeURIComponent(cards[1].image);
+    cimg3.src = "images/lenormand/" + encodeURIComponent(cards[2].image);
+  });
+  // ========== 字卡传讯 ==========
+  screens.wordcardInput = document.getElementById('screen-wordcard-input');
+  screens.wordcardResult = document.getElementById('screen-wordcard-result');
+  TYPE_LABELS.wordcard = '字卡传讯';
+
+  const wordDeck = new WordCardDeck();
+
+  // 首页入口
+  document.getElementById('btn-wordcard').addEventListener('click', () => {
+    showScreen('wordcardInput');
+  });
+
+  // 返回
+  document.getElementById('btn-wordcard-back').addEventListener('click', () => {
+    showScreen('welcome');
+  });
+
+  // 翻开
+  document.getElementById('btn-wordcard-draw').addEventListener('click', () => {
+    const question = document.getElementById('wordcard-question').value.trim();
+    wordDeck.reset();
+    const round = wordDeck.draw(question);
+    showScreen('wordcardResult');
+    renderWordcardRound(round, true);
+    updateWordcardFooter();
+  });
+
+  // 再翻一轮
+  document.getElementById('btn-wordcard-more').addEventListener('click', () => {
+    if (!wordDeck.canDrawMore()) return;
+    const question = document.getElementById('wordcard-question').value.trim();
+    const round = wordDeck.draw(question);
+    renderWordcardRound(round, false);
+    updateWordcardFooter();
+  });
+
+  // 清空重来
+  document.getElementById('btn-wordcard-reset').addEventListener('click', () => {
+    wordDeck.reset();
+    document.getElementById('wordcard-chat-area').innerHTML = '';
+    showScreen('wordcardInput');
+    document.getElementById('wordcard-question').value = '';
+  });
+
+  // 返回首页
+  document.getElementById('btn-wordcard-home').addEventListener('click', () => {
+    wordDeck.reset();
+    document.getElementById('wordcard-chat-area').innerHTML = '';
+    document.getElementById('wordcard-question').value = '';
+    showScreen('welcome');
+  });
+
+  function updateWordcardFooter() {
+    const moreBtn = document.getElementById('btn-wordcard-more');
+    if (wordDeck.canDrawMore()) {
+      moreBtn.style.display = '';
+      moreBtn.textContent = `再翻一轮 (${wordDeck.rounds.length}/${wordDeck.maxRounds})`;
+    } else {
+      moreBtn.style.display = 'none';
+    }
+  }
+
+  // 核心：渲染一轮 3 张卡 → 卡片翻转 → 变气泡
+  function renderWordcardRound(round, isFirst) {
+    const chatArea = document.getElementById('wordcard-chat-area');
+
+    if (isFirst) {
+      chatArea.innerHTML = '';
+    }
+
+    // 轮次分隔（非第一轮）
+    if (!isFirst) {
+      const sep = document.createElement('div');
+      sep.className = 'wordcard-round-sep';
+      sep.textContent = '· · ·';
+      chatArea.appendChild(sep);
+    }
+
+    // 3 张卡，逐张延迟出现
+    round.cards.forEach((card, i) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'wordcard-item';
+      wrapper.style.animationDelay = `${i * 0.6}s`;
+
+      // 阶段1: 小卡片（翻转）
+      wrapper.innerHTML = `
+        <div class="wordcard-flip-container">
+          <div class="wordcard-flip-inner">
+            <div class="wordcard-flip-front">?</div>
+            <div class="wordcard-flip-back">${card.text}</div>
+          </div>
+        </div>
+      `;
+      chatArea.appendChild(wrapper);
+
+      // 延迟后执行翻转 → 变气泡
+      setTimeout(() => {
+        wrapper.classList.add('flipping');
+      }, i * 600 + 200);
+
+      setTimeout(() => {
+        wrapper.classList.add('to-bubble');
+        wrapper.innerHTML = `<div class="wordcard-bubble">${card.text}</div>`;
+      }, i * 600 + 1200);
+    });
+
+    // 最后一轮自动存档
+    const totalDelay = 3 * 600 + 1500;
+    setTimeout(() => {
+      // 滚到底部
+      chatArea.scrollTop = chatArea.scrollHeight;
+
+      // 自动存档到信箱
+      if (typeof Auth !== 'undefined' && Auth.currentUser) {
+        const allText = wordDeck.getAllText();
+        Auth.saveToMailbox('wordcard', allText, {
+          rounds: wordDeck.rounds.length,
+          question: document.getElementById('wordcard-question').value.trim() || '（无题）'
+        }).catch(() => {});
+      }
+    }, totalDelay);
+  }
+
+  // 卡牌放大（事件委托）
+  const zoomOverlay = document.getElementById("card-zoom-overlay");
+  const zoomImg = document.getElementById("card-zoom-img");
+  const zoomName = document.getElementById("card-zoom-name");
+  const zoomNameEn = document.getElementById("card-zoom-name-en");
+  const zoomKeywords = document.getElementById("card-zoom-keywords");
+
+  document.addEventListener("click", (e) => {
+    const card = e.target.closest(".lenormand-card");
+    if (!card) return;
+    // 只在结果屏生效
+    if (!card.closest("#screen-lenormand-result")) return;
+    const img = card.querySelector(".lenormand-card-img");
+    if (!img || !img.getAttribute("src")) return;
+    zoomImg.src = img.src;
+    zoomName.textContent = card.querySelector(".lenormand-card-name").textContent || "";
+    zoomNameEn.textContent = card.querySelector(".lenormand-card-name-en").textContent || "";
+    zoomKeywords.textContent = card.querySelector(".lenormand-card-keywords").textContent || "";
+    zoomOverlay.classList.add("active");
+  });
+
+  zoomOverlay.addEventListener("click", () => {
+    zoomOverlay.classList.remove("active");
+  });
+

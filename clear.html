@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>清除缓存</title>
+<style>body{font-family:system-ui;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f5f5f5;flex-direction:column;gap:16px}
+.status{padding:12px 24px;background:white;border-radius:12px;font-size:14px;max-width:300px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.1)}</style>
+</head>
+<body>
+<div class="status" id="status">正在清除缓存...</div>
+<script>
+async function clearAll() {
+  const el = document.getElementById("status");
+  let msgs = [];
+  try {
+    const keys = await caches.keys();
+    for (const k of keys) { await caches.delete(k); }
+    msgs.push("✅ 已清除 " + keys.length + " 个缓存");
+  } catch(e) { msgs.push("⚠️ 缓存: " + e.message); }
+  try {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    for (const r of regs) { await r.unregister(); }
+    msgs.push("✅ 已卸载 " + regs.length + " 个 Service Worker");
+  } catch(e) { msgs.push("⚠️ SW: " + e.message); }
+  if (msgs.length === 0) msgs.push("没有需要清除的缓存");
+  msgs.push("⏳ 3秒后跳转首页...");
+  el.innerHTML = msgs.join("<br>");
+  setTimeout(() => { window.location.href = "/?t=" + Date.now(); }, 3000);
+}
+clearAll();
+</script>
+</body>
+</html>

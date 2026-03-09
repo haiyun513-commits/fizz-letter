@@ -1,57 +1,12 @@
-const CACHE_NAME = 'fizz-letter-v2';
-const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/css/style.css',
-  '/js/app.js',
-  '/js/letters.js',
-  '/js/bubbles.js',
-  '/js/answer.js',
-  '/js/tarot.js',
-  '/js/auth.js',
-  '/images/favicon-32.png',
-  '/images/favicon-16.png',
-  '/images/apple-touch-icon.png',
-  '/manifest.json'
-];
-
-self.addEventListener('install', e => {
+// no-op service worker: 清缓存 + 自杀（Chrome 官方推荐方案）
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (e) => {
   e.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(STATIC_ASSETS))
-      .then(() => self.skipWaiting())
-  );
-});
-
-self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
-  );
-});
-
-self.addEventListener('fetch', e => {
-  // API 请求不缓存，直接走网络
-  if (e.request.url.includes('/api/')) {
-    return;
-  }
-  // 塔罗图片：缓存优先
-  if (e.request.url.includes('/images/tarot/')) {
-    e.respondWith(
-      caches.match(e.request).then(cached => {
-        if (cached) return cached;
-        return fetch(e.request).then(resp => {
-          const clone = resp.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
-          return resp;
-        });
+    caches.keys()
+      .then(keys => Promise.all(keys.map(k => caches.delete(k))))
+      .then(() => self.clients.matchAll({ type: 'window' }))
+      .then(clients => {
+        clients.forEach(c => c.navigate(c.url));
       })
-    );
-    return;
-  }
-  // 静态资源：缓存优先，回退网络
-  e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request))
   );
 });

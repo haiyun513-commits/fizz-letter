@@ -374,3 +374,163 @@
   gap: 16px;
   margin-top: 32px;
 }
+/* === 泡沫来信 认证弹窗美化 === */
+/* 此文件由阿文维护，师傅请勿修改 */
+
+/* --- 亮色主题 --- */
+[data-theme="light"] .auth-modal-content,
+:root .auth-modal-content {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  border-radius: 24px;
+  box-shadow: 0 8px 32px rgba(140, 170, 220, 0.12),
+              inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  overflow: visible;
+  isolation: isolate;
+}
+[data-theme="light"] .auth-input,
+:root .auth-input {
+  background: rgba(255, 255, 255, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 14px;
+  box-shadow: inset 0 1px 2px rgba(140, 170, 220, 0.06);
+}
+[data-theme="light"] .auth-input:focus,
+:root .auth-input:focus {
+  background: rgba(255, 255, 255, 0.5);
+  border-color: rgba(140, 170, 220, 0.4);
+  box-shadow: 0 0 16px rgba(140, 170, 220, 0.12);
+}
+[data-theme="light"] .auth-input::placeholder,
+:root .auth-input::placeholder {
+  color: rgba(80, 100, 140, 0.35);
+}
+[data-theme="light"] .auth-submit,
+:root .auth-submit {
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(140, 170, 220, 0.25);
+  box-shadow: 0 2px 8px rgba(140, 170, 220, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+[data-theme="light"] .auth-submit:hover,
+:root .auth-submit:hover {
+  background: rgba(255, 255, 255, 0.55);
+  border-color: rgba(140, 170, 220, 0.35);
+  box-shadow: 0 4px 20px rgba(140, 170, 220, 0.15);
+}
+[data-theme="light"] .auth-switch span,
+:root .auth-switch span {
+  color: rgba(100, 130, 190, 0.8);
+}
+[data-theme="light"] .auth-modal,
+:root .auth-modal {
+  background: rgba(230, 235, 245, 0.3);
+}
+[data-theme="light"] .auth-title,
+:root .auth-title {
+  color: rgba(50, 60, 80, 0.8);
+}
+[data-theme="light"] .auth-modal-content::before,
+:root .auth-modal-content::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: 25px;
+  z-index: -1;
+  background: linear-gradient(135deg,
+    rgba(240, 190, 210, 0.15), rgba(190, 210, 240, 0.15),
+    rgba(200, 235, 215, 0.12), rgba(235, 215, 195, 0.13),
+    rgba(210, 200, 235, 0.15), rgba(195, 225, 240, 0.12),
+    rgba(240, 190, 210, 0.15));
+  background-size: 300% 300%;
+  -webkit-filter: blur(3px); filter: blur(3px);
+  -webkit-animation: bubbleDrift 10s ease-in-out infinite;
+  animation: bubbleDrift 10s ease-in-out infinite;
+}
+[data-theme="light"] .auth-modal-content::after,
+:root .auth-modal-content::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 24px;
+  z-index: -1;
+  background: rgba(255, 255, 255, 0.35);
+  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+}
+@-webkit-keyframes bubbleDrift {
+  0%   { background-position: 0% 50%; opacity: 0.8; }
+  25%  { background-position: 100% 25%; opacity: 1; }
+  50%  { background-position: 50% 100%; opacity: 0.7; }
+  75%  { background-position: 25% 0%; opacity: 1; }
+  100% { background-position: 0% 50%; opacity: 0.8; }
+}
+@keyframes bubbleDrift {
+  0%   { background-position: 0% 50%; opacity: 0.8; }
+  25%  { background-position: 100% 25%; opacity: 1; }
+  50%  { background-position: 50% 100%; opacity: 0.7; }
+  75%  { background-position: 25% 0%; opacity: 1; }
+  100% { background-position: 0% 50%; opacity: 0.8; }
+}
+
+/* --- 暗色主题 --- */
+[data-theme="dark"] .auth-modal-content {
+  background: linear-gradient(135deg, rgba(10, 50, 90, 0.45), rgba(20, 60, 100, 0.35));
+  border: none;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3),
+              inset 0 1px 0 rgba(255, 255, 255, 0.08),
+              inset 0 0 40px rgba(6, 88, 140, 0.06);
+  backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
+  overflow: visible; isolation: isolate;
+}
+[data-theme="dark"] .auth-input {
+  background: rgba(15, 55, 95, 0.3);
+  border: 1px solid rgba(140, 180, 220, 0.12);
+}
+[data-theme="dark"] .auth-input:focus {
+  background: rgba(15, 55, 95, 0.4);
+  border-color: rgba(100, 160, 220, 0.4);
+  box-shadow: 0 0 20px rgba(6, 88, 140, 0.15);
+}
+[data-theme="dark"] .auth-submit {
+  background: linear-gradient(135deg, rgba(10, 55, 100, 0.4), rgba(20, 65, 110, 0.3));
+  border: 1px solid rgba(140, 180, 220, 0.2);
+}
+[data-theme="dark"] .auth-submit:hover {
+  background: linear-gradient(135deg, rgba(6, 88, 140, 0.35), rgba(20, 70, 120, 0.3));
+  border-color: rgba(100, 160, 220, 0.35);
+  box-shadow: 0 4px 24px rgba(6, 88, 140, 0.2);
+}
+[data-theme="dark"] .auth-switch span { color: rgba(100, 160, 220, 0.8); }
+[data-theme="dark"] .mailbox-item {
+  background: linear-gradient(135deg, rgba(10, 50, 90, 0.3), rgba(15, 55, 95, 0.2));
+  border: 1px solid rgba(140, 180, 220, 0.08);
+}
+[data-theme="dark"] .mailbox-item:hover {
+  border-color: rgba(100, 160, 220, 0.2);
+  box-shadow: 0 4px 20px rgba(6, 88, 140, 0.1);
+}
+[data-theme="dark"] .mailbox-item-type {
+  color: rgba(100, 160, 220, 0.9);
+  background: rgba(6, 88, 140, 0.15);
+  border-color: rgba(100, 160, 220, 0.2);
+}
+[data-theme="dark"] .auth-modal-content::before {
+  content: "";
+  position: absolute; inset: -1px; border-radius: 25px; z-index: -1;
+  background: linear-gradient(135deg,
+    rgba(80, 120, 180, 0.1), rgba(110, 90, 150, 0.08),
+    rgba(80, 140, 130, 0.06), rgba(110, 130, 170, 0.08),
+    rgba(90, 110, 160, 0.1), rgba(80, 130, 160, 0.08),
+    rgba(80, 120, 180, 0.1));
+  background-size: 300% 300%;
+  -webkit-filter: blur(4px); filter: blur(4px);
+  -webkit-animation: bubbleDrift 14s ease-in-out infinite;
+  animation: bubbleDrift 14s ease-in-out infinite;
+}
+[data-theme="dark"] .auth-modal-content::after {
+  content: "";
+  position: absolute; inset: 0; border-radius: 24px; z-index: -1;
+  background: rgba(8, 40, 75, 0.72);
+  -webkit-backdrop-filter: blur(28px); backdrop-filter: blur(28px);
+}

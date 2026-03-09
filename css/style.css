@@ -738,6 +738,8 @@ body {
 
 /* ===== 信件屏 ===== */
 #screen-letter {
+  justify-content: flex-start;
+  align-items: center;
   padding: 20px;
   overflow-y: auto;
   padding-bottom: 120px;
@@ -745,6 +747,8 @@ body {
 
 /* 毛玻璃信纸 */
 .letter-paper {
+  margin: auto 0;
+  flex-shrink: 0;
   width: 100%;
   max-width: 560px;
   min-height: 400px;
@@ -927,6 +931,7 @@ body {
 
 /* 再来一次 */
 .letter-footer {
+  flex-shrink: 0;
   margin-top: 40px;
   text-align: center;
 }
@@ -1633,9 +1638,462 @@ body {
   opacity: 1;
 }
 
+
+/* ===== 占卜选择屏 ===== */
+.divination-select {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 0 24px;
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+
+.divination-options {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 36px;
+}
+
+.divination-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 24px;
+  width: 150px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  /* backdrop-filter: none; */
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: none;
+}
+
+.divination-card:hover {
+  transform: translateY(-4px);
+  box-shadow: none;
+  /* border-color: none; */
+}
+
+.divination-card:active {
+  transform: translateY(0);
+}
+
+[data-theme="dark"] .divination-card {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+[data-theme="dark"] .divination-card:hover {
+  box-shadow: none;
+}
+
+.divination-icon {
+  width: 80px;
+  height: auto;
+  border-radius: 8px;
+  object-fit: cover;
+  
+}
+
+.divination-label {
+  font-family: 'LXGW WenKai', 'Noto Serif SC', serif;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+  letter-spacing: 0.15em;
+}
+
+.divination-label-en {
+  font-family: "Dancing Script", cursive;
+  font-size: 0.85rem;
+  color: var(--text-ghost);
+  letter-spacing: 0.02em;
+}
+
+/* ===== 雷诺曼：提问屏 ===== */
+.lenormand-input-box {
+  text-align: center;
+  width: 100%;
+  max-width: 420px;
+  padding: 0 24px;
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.lenormand-input-title {
+  font-family: 'LXGW WenKai', 'Noto Serif SC', serif;
+  font-size: clamp(1.6rem, 5vw, 2.2rem);
+  color: var(--text-primary);
+  letter-spacing: 0.3em;
+  margin-bottom: 4px;
+}
+
+.lenormand-input-subtitle {
+  font-family: 'Dancing Script', cursive;
+  font-size: 1rem;
+  color: var(--text-ghost);
+  margin-bottom: 12px;
+}
+
+.lenormand-input-hint {
+  font-family: 'Noto Serif SC', serif;
+  font-weight: 300;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 28px;
+  letter-spacing: 0.1em;
+}
+
+#lenormand-question {
+  width: 100%;
+  min-height: 90px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 18px;
+  font-family: 'Noto Serif SC', serif;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  resize: none;
+  outline: none;
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  margin-bottom: 24px;
+}
+
+[data-theme="dark"] #lenormand-question {
+  background: rgba(10, 20, 30, 0.5);
+  border-color: rgba(200, 198, 198, 0.06);
+}
+
+/* ===== 雷诺曼：抽牌动画 ===== */
+.lenormand-loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.lenormand-cards-spinning {
+  display: flex;
+  gap: 20px;
+}
+
+.lenormand-card-placeholder {
+  width: 80px;
+  height: 130px;
+  border-radius: 12px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Dancing Script', cursive;
+  font-size: 2.4rem;
+  color: var(--text-ghost);
+  animation: tarotSpin 1.8s ease-in-out infinite;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+}
+
+.lenormand-card-placeholder:nth-child(2) {
+  animation-delay: 0.3s;
+}
+
+.lenormand-card-placeholder:nth-child(3) {
+  animation-delay: 0.6s;
+}
+
+[data-theme="dark"] .lenormand-card-placeholder {
+  background: rgba(10, 20, 30, 0.5);
+  border-color: rgba(200, 198, 198, 0.06);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.lenormand-loading-text {
+  font-family: 'Noto Serif SC', serif;
+  font-weight: 300;
+  font-size: 0.9rem;
+  color: var(--text-ghost);
+  letter-spacing: 0.4em;
+  animation: breathe 2s ease-in-out infinite;
+}
+
+/* ===== 雷诺曼：结果展示 ===== */
+.lenormand-result-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 20px;
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.lenormand-cards-display {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+.lenormand-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  animation: fadeInUp 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.lenormand-card:nth-child(3) {
+  animation-delay: 0.3s;
+  animation-fill-mode: both;
+}
+
+.lenormand-card:nth-child(5) {
+  animation-delay: 0.6s;
+  animation-fill-mode: both;
+}
+
+.lenormand-card-img {
+  width: 120px;
+  height: auto;
+  border-radius: 10px;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.12),
+    0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.lenormand-card-name {
+  font-family: 'LXGW WenKai', 'Noto Serif SC', serif;
+  font-size: 1rem;
+  color: var(--text-primary);
+  letter-spacing: 0.2em;
+}
+
+.lenormand-card-name-en {
+  font-family: 'Dancing Script', cursive;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.lenormand-card-keywords {
+  font-size: 0.7rem;
+  color: var(--text-ghost);
+  letter-spacing: 0.1em;
+}
+
+.lenormand-card-connector {
+  font-family: 'Dancing Script', cursive;
+  font-size: 1.6rem;
+  color: var(--text-ghost);
+  align-self: center;
+  margin-top: 60px;
+  opacity: 0.5;
+}
+
+.lenormand-reading {
+  font-family: 'Noto Serif SC', serif;
+  font-weight: 300;
+  font-size: 0.95rem;
+  line-height: 2;
+  color: var(--text-secondary);
+  text-align: center;
+  max-width: 340px;
+  margin-top: 8px;
+  opacity: 0;
+  transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.lenormand-reading.show {
+  opacity: 1;
+}
+
+.lenormand-footer {
+  margin-top: 28px;
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.lenormand-footer.show {
+  opacity: 1;
+}
+
+/* ===== 悄悄话 ===== */
+.lenormand-whisper-section {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  opacity: 0;
+  transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.lenormand-whisper-section.show {
+  opacity: 1;
+}
+
+.btn-whisper {
+  background: transparent;
+  border: 1px solid var(--glass-border);
+  color: var(--text-ghost);
+  font-family: 'LXGW WenKai', serif;
+  font-size: 0.75rem;
+  padding: 6px 18px;
+  border-radius: 20px;
+  cursor: pointer;
+  letter-spacing: 0.15em;
+  transition: all 0.3s ease;
+}
+
+.btn-whisper:hover {
+  color: var(--text-secondary);
+  border-color: var(--text-ghost);
+}
+
+.btn-whisper:disabled {
+  opacity: 0.4;
+  cursor: wait;
+}
+
+[data-theme="dark"] .btn-whisper {
+  border-color: rgba(200, 198, 198, 0.08);
+}
+
+.lenormand-whisper {
+  font-family: 'Noto Serif SC', serif;
+  font-weight: 300;
+  font-size: 0.88rem;
+  line-height: 1.9;
+  color: var(--text-secondary);
+  text-align: center;
+  max-width: 320px;
+  font-style: italic;
+  opacity: 0;
+  transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.lenormand-whisper.show {
+  opacity: 1;
+}
+
+/* ===== 卡牌放大 ===== */
+.card-zoom-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.card-zoom-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.card-zoom-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  transform: scale(0.85);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-zoom-overlay.active .card-zoom-content {
+  transform: scale(1);
+}
+
+.card-zoom-img {
+  width: 240px;
+  height: auto;
+  border-radius: 14px;
+  box-shadow: 0 16px 64px rgba(0, 0, 0, 0.3);
+}
+
+.card-zoom-name {
+  font-family: 'LXGW WenKai', 'Noto Serif SC', serif;
+  font-size: 1.3rem;
+  color: #fff;
+  letter-spacing: 0.25em;
+  margin-top: 4px;
+}
+
+.card-zoom-name-en {
+  font-family: 'Dancing Script', cursive;
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.card-zoom-keywords {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.35);
+  letter-spacing: 0.12em;
+}
+
+.lenormand-card {
+  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .card-zoom-img {
+    width: 200px;
+  }
+}
+
+/* ===== 雷诺曼 移动端 ===== */
+@media (max-width: 600px) {
+  .divination-options {
+    flex-direction: column;
+    gap: 14px;
+  }
+  .divination-card {
+    width: 100%;
+    max-width: 200px;
+    padding: 20px 18px;
+  }
+  .lenormand-card-img {
+    width: 85px;
+  }
+  .lenormand-cards-display {
+    gap: 8px;
+  }
+  .lenormand-card-placeholder {
+    width: 65px;
+    height: 105px;
+  }
+  #lenormand-question {
+    min-height: 70px;
+    font-size: 0.9rem;
+  }
+  .lenormand-footer {
+    flex-direction: column;
+    gap: 10px;
+  }
+}
+
 /* ===== 响应式 ===== */
 @media (max-width: 600px) {
   .letter-paper {
+  margin: auto 0;
+  flex-shrink: 0;
     padding: 32px 24px;
     margin: 0 8px;
     font-size: 0.92rem !important;
@@ -1645,6 +2103,7 @@ body {
   }
 
   .letter-footer {
+  flex-shrink: 0;
     margin-top: 24px;
     padding-bottom: 40px;
   }
@@ -1713,3 +2172,2993 @@ body {
   }
 }
 
+
+/* ═══════════════════════════════════════════════════════
+   信友系统 — Pen Pal Styles
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Mailbox Home ── */
+.mailbox-home-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 16px 12px;
+  position: relative;
+}
+
+.mailbox-home-title {
+  font-family: 'LXGW WenKai', 'Noto Serif SC', serif;
+  font-size: 1.15rem;
+  color: var(--text-primary);
+  letter-spacing: 0.08em;
+}
+
+#screen-mailbox-home {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mailbox-home-footer {
+  padding: 20px 16px 32px;
+  text-align: center;
+  margin-top: auto;
+}
+
+/* ── Pen Pal List ── */
+.penpal-list {
+  flex: 1;
+  padding: 0 16px;
+  overflow-y: auto;
+}
+
+.penpal-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  cursor: pointer;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  position: relative;
+}
+
+.penpal-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(0,0,0,0.08);
+}
+
+.penpal-card:active {
+  transform: translateY(0);
+}
+
+.penpal-card-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-dim), var(--accent));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'LXGW WenKai', serif;
+  font-size: 1.1rem;
+  color: #fff;
+  flex-shrink: 0;
+  letter-spacing: 0;
+}
+
+.penpal-avatar-archived {
+  opacity: 0.5;
+}
+
+.penpal-card-body {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.penpal-card-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.penpal-card-name {
+  font-family: 'LXGW WenKai', 'Noto Sans SC', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.penpal-card-time {
+  font-size: 0.72rem;
+  color: var(--text-ghost);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.penpal-card-preview {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.penpal-card-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.65rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.penpal-card-archived {
+  opacity: 0.6;
+}
+
+/* ── Add Pen Pal ── */
+.penpal-add-section {
+  padding: 8px 16px 4px;
+  text-align: center;
+}
+
+.btn-add-penpal {
+  display: inline-block;
+  padding: 10px 28px;
+  font-family: 'LXGW WenKai', sans-serif;
+  font-size: 0.9rem;
+  color: var(--accent);
+  background: var(--glass-bg);
+  border: 1px dashed var(--accent-dim);
+  border-radius: 24px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  letter-spacing: 0.06em;
+}
+
+.btn-add-penpal:hover {
+  background: var(--accent-dim);
+  color: var(--text-primary);
+  border-style: solid;
+}
+
+/* ── Archive Section ── */
+.archive-section {
+  padding: 0 16px;
+  margin-top: 8px;
+}
+
+.archive-toggle {
+  font-size: 0.8rem;
+  color: var(--text-ghost);
+  cursor: pointer;
+  padding: 8px 0;
+  text-align: center;
+  transition: color 0.3s;
+  user-select: none;
+}
+
+.archive-toggle:hover {
+  color: var(--text-secondary);
+}
+
+.archive-toggle::before {
+  content: '\25b8 ';
+}
+
+.archive-toggle.open::before {
+  content: '\25be ';
+}
+
+.archive-list {
+  padding-top: 4px;
+}
+
+/* ── Mailbox Divider ── */
+.mailbox-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 16px 8px;
+  font-size: 0.75rem;
+  color: var(--text-ghost);
+  letter-spacing: 0.1em;
+}
+
+.mailbox-divider::before,
+.mailbox-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--glass-border);
+}
+
+/* ── Legacy mailbox cards ── */
+.legacy-mailbox {
+  padding: 0 16px 24px;
+}
+
+.legacy-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 6px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  cursor: pointer;
+  transition: transform 0.2s;
+  opacity: 0.8;
+}
+
+.legacy-card:hover {
+  transform: translateY(-1px);
+  opacity: 1;
+}
+
+.legacy-card-icon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.legacy-card-body {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.legacy-card-label {
+  font-size: 0.72rem;
+  color: var(--text-ghost);
+}
+
+.legacy-card-preview {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Empty States ── */
+.penpal-empty {
+  text-align: center;
+  padding: 48px 16px;
+}
+
+.penpal-empty-icon {
+  font-size: 2.4rem;
+  margin-bottom: 12px;
+  opacity: 0.6;
+}
+
+.penpal-empty-text {
+  font-family: 'LXGW WenKai', serif;
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.penpal-empty-hint {
+  font-size: 0.78rem;
+  color: var(--text-ghost);
+  text-align: center;
+  padding: 12px 0;
+}
+
+/* ── Restore Button ── */
+.btn-restore {
+  padding: 4px 12px;
+  font-size: 0.72rem;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--accent-dim);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.btn-restore:hover {
+  background: var(--accent-dim);
+}
+
+/* ═══════════════════════════════════════════════════════
+   Pen Pal Create Screen
+   ═══════════════════════════════════════════════════════ */
+.penpal-create-box {
+  max-width: 380px;
+  margin: 0 auto;
+  padding: 60px 24px 40px;
+  text-align: center;
+}
+
+.penpal-create-title {
+  font-family: 'LXGW WenKai', 'Noto Serif SC', serif;
+  font-size: 1.3rem;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.penpal-create-hint {
+  font-size: 0.8rem;
+  color: var(--text-ghost);
+  margin-bottom: 32px;
+}
+
+.penpal-input {
+  width: 100%;
+  padding: 14px 16px;
+  font-family: 'LXGW WenKai', 'Noto Sans SC', sans-serif;
+  font-size: 1.05rem;
+  color: var(--text-primary);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  outline: none;
+  text-align: center;
+  letter-spacing: 0.12em;
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  transition: border-color 0.3s;
+}
+
+.penpal-input:focus {
+  border-color: var(--accent);
+}
+
+.penpal-input::placeholder {
+  color: var(--text-ghost);
+  letter-spacing: 0.06em;
+}
+
+.penpal-name-count {
+  font-size: 0.7rem;
+  color: var(--text-ghost);
+  text-align: right;
+  margin-top: 6px;
+  margin-bottom: 24px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Pen Pal Detail Screen
+   ═══════════════════════════════════════════════════════ */
+#screen-penpal-detail {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.penpal-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 16px 8px;
+  flex-shrink: 0;
+}
+
+.penpal-detail-name {
+  font-family: 'LXGW WenKai', 'Noto Serif SC', serif;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+  letter-spacing: 0.06em;
+}
+
+/* ── Tabs ── */
+.penpal-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--glass-border);
+  flex-shrink: 0;
+}
+
+.penpal-tab {
+  flex: 1;
+  padding: 10px 0;
+  font-family: 'LXGW WenKai', sans-serif;
+  font-size: 0.88rem;
+  color: var(--text-ghost);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.3s;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.penpal-tab:hover {
+  color: var(--text-secondary);
+}
+
+.penpal-tab.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+}
+
+/* ── Tab Content ── */
+.penpal-tab-content {
+  display: none;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.penpal-tab-content.active {
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ── Letter Timeline ── */
+.letter-timeline {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px 16px 8px;
+  scroll-behavior: smooth;
+}
+
+.letter-timeline-empty {
+  text-align: center;
+  padding: 48px 0;
+}
+
+.letter-timeline-empty-icon {
+  font-size: 2rem;
+  margin-bottom: 10px;
+  opacity: 0.5;
+}
+
+.letter-timeline-empty-text {
+  font-family: 'LXGW WenKai', serif;
+  font-size: 0.9rem;
+  color: var(--text-ghost);
+}
+
+/* ── Letter Cards ── */
+.letter-card {
+  margin-bottom: 16px;
+  padding: 18px 20px 14px;
+  border-radius: 16px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  animation: letterFadeIn 0.4s ease;
+  position: relative;
+}
+
+.letter-card-user {
+  margin-left: 20px;
+  border-left: 3px solid var(--accent-dim);
+}
+
+.letter-card-ai {
+  margin-right: 20px;
+  border-right: 3px solid var(--accent);
+  background: linear-gradient(
+    135deg,
+    var(--glass-bg),
+    rgba(140, 160, 200, 0.08)
+  );
+}
+
+[data-theme="dark"] .letter-card-ai {
+  background: linear-gradient(
+    135deg,
+    var(--glass-bg),
+    rgba(140, 180, 255, 0.06)
+  );
+}
+
+.letter-card-date {
+  font-size: 0.68rem;
+  color: var(--text-ghost);
+  margin-bottom: 8px;
+  letter-spacing: 0.04em;
+}
+
+.letter-card-content {
+  font-family: 'LXGW WenKai', 'Noto Serif SC', serif;
+  font-size: 0.88rem;
+  line-height: 1.75;
+  color: var(--text-primary);
+}
+
+.letter-card-content p {
+  margin-bottom: 6px;
+}
+
+.letter-card-content p:last-child {
+  margin-bottom: 0;
+}
+
+.letter-card-reveal {
+  animation: letterReveal 0.8s ease;
+}
+
+@keyframes letterFadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes letterReveal {
+  0% { opacity: 0; transform: translateY(20px) scale(0.97); }
+  50% { opacity: 0.7; transform: translateY(-4px) scale(1.01); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ── Letter Waiting ── */
+.letter-waiting,
+.fragment-waiting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.waiting-envelope {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 1.6rem;
+  height: 2rem;
+}
+
+.writing-pen {
+  display: inline-block;
+  animation: penWrite 1.2s ease-in-out infinite;
+  transform-origin: bottom right;
+}
+
+@keyframes penWrite {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  30% { transform: rotate(-8deg) translateY(-2px); }
+  60% { transform: rotate(4deg) translateY(1px); }
+}
+
+.writing-dots {
+  font-size: 1.2rem;
+  letter-spacing: 2px;
+  color: var(--text-ghost);
+  animation: dotsWave 1.5s ease-in-out infinite;
+}
+
+@keyframes dotsWave {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+.waiting-text {
+  font-family: 'LXGW WenKai', serif;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  letter-spacing: 0.12em;
+}
+
+.waiting-time {
+  font-size: 0.72rem;
+  color: var(--text-ghost);
+}
+
+/* ── Letter Compose ── */
+.letter-compose {
+  padding: 10px 16px 20px;
+  border-top: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  flex-shrink: 0;
+}
+
+.letter-compose textarea {
+  width: 100%;
+  min-height: 64px;
+  max-height: 120px;
+  padding: 12px 14px;
+  font-family: 'LXGW WenKai', 'Noto Sans SC', sans-serif;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  resize: none;
+  outline: none;
+  transition: border-color 0.3s;
+}
+
+.letter-compose textarea:focus {
+  border-color: var(--accent);
+}
+
+.letter-compose textarea::placeholder {
+  color: var(--text-ghost);
+}
+
+.letter-compose-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.letter-char-count {
+  font-size: 0.68rem;
+  color: var(--text-ghost);
+}
+
+.btn-send {
+  padding: 8px 20px;
+  font-family: 'LXGW WenKai', sans-serif;
+  font-size: 0.82rem;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: 18px;
+  cursor: pointer;
+  transition: all 0.3s;
+  letter-spacing: 0.06em;
+}
+
+.btn-send:hover {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+
+.btn-send:active {
+  transform: translateY(0);
+}
+
+.btn-send:disabled {
+  opacity: 0.4;
+  cursor: wait;
+  transform: none;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Fragments (Mind Back)
+   ═══════════════════════════════════════════════════════ */
+.fragment-intro {
+  text-align: center;
+  padding: 28px 16px 16px;
+}
+
+.fragment-intro-title {
+  font-family: 'LXGW WenKai', serif;
+  font-size: 1rem;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.fragment-intro-hint {
+  font-size: 0.78rem;
+  color: var(--text-ghost);
+}
+
+
+.fragment-scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 8px;
+  min-height: 0;
+}
+
+.fragment-compose {
+  flex-shrink: 0;
+}
+
+.fragment-compose {
+  padding: 0 16px 12px;
+  flex-shrink: 0;
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.fragment-compose textarea {
+  flex: 1;
+  min-height: 44px;
+  max-height: 80px;
+  padding: 10px 14px;
+  font-family: 'LXGW WenKai', sans-serif;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  resize: none;
+  outline: none;
+  transition: border-color 0.3s;
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+
+.fragment-compose textarea:focus {
+  border-color: var(--accent);
+}
+
+.fragment-compose textarea::placeholder {
+  color: var(--text-ghost);
+}
+
+.btn-fragment-send {
+  padding: 10px 18px;
+  border-radius: 14px;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.fragment-input-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fragment-input-wrap textarea {
+  width: 100%;
+}
+
+.fragment-actions {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+
+.btn-fragment-img {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+
+.btn-fragment-img:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.fragment-image-preview {
+  position: relative;
+  max-width: 120px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+}
+
+.fragment-image-preview img {
+  width: 100%;
+  display: block;
+  border-radius: 10px;
+}
+
+.fragment-preview-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.6);
+  color: white;
+  border: none;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fragment-img {
+  margin-top: 6px;
+  max-width: 200px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.fragment-img img {
+  width: 100%;
+  display: block;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.fragment-img img:hover {
+  opacity: 0.85;
+}
+
+.btn-reading, .btn-reading:disabled {
+  animation: pulse-reading 1.5s ease-in-out infinite;
+  cursor: wait !important;
+  opacity: 1 !important;
+}
+
+@keyframes pulse-reading {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(0.6); }
+}
+
+/* ── Fragment Items ── */
+.fragment-section-title {
+  font-size: 0.72rem;
+  color: var(--text-ghost);
+  padding: 12px 16px 6px;
+  letter-spacing: 0.1em;
+}
+
+.fragment-today {
+  padding: 0 16px;
+}
+
+.fragment-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+[data-theme="light"] .fragment-item {
+  border-bottom: 1px solid rgba(0,0,0,0.04);
+}
+
+.fragment-time {
+  font-size: 0.68rem;
+  color: var(--text-ghost);
+  white-space: nowrap;
+}
+
+.fragment-text {
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  line-height: 1.55;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  padding: 8px 14px;
+  border-radius: 14px 4px 14px 14px;
+  max-width: 80%;
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+
+/* ── Fragment Digests (AI replies) ── */
+.fragment-digests {
+  padding: 0 16px 24px;
+}
+
+.fragment-digest {
+  padding: 14px 16px;
+  margin-top: 8px;
+  background: linear-gradient(135deg, var(--glass-bg), rgba(140, 160, 200, 0.06));
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+
+.fragment-digest-date {
+  font-size: 0.68rem;
+  color: var(--text-ghost);
+  margin-bottom: 6px;
+}
+
+.fragment-digest-content {
+  font-family: 'LXGW WenKai', serif;
+  font-size: 0.85rem;
+  line-height: 1.7;
+  color: var(--text-primary);
+}
+
+.fragment-digest-content p {
+  margin-bottom: 4px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Pen Pal Menu Popup
+   ═══════════════════════════════════════════════════════ */
+.penpal-menu-popup {
+  position: absolute;
+  top: 56px;
+  right: 16px;
+  min-width: 120px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+  z-index: 100;
+  overflow: hidden;
+  animation: menuSlideIn 0.2s ease;
+}
+
+@keyframes menuSlideIn {
+  from { opacity: 0; transform: translateY(-8px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.penpal-menu-item {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.penpal-menu-item:hover {
+  background: var(--accent-dim);
+}
+
+/* ═══════════════════════════════════════════════════════
+   Mail Settings Modal
+   ═══════════════════════════════════════════════════════ */
+#mail-settings-modal .settings-section {
+  padding: 12px 0;
+}
+
+#mail-settings-modal .settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+}
+
+#mail-settings-modal .settings-row span {
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+#mail-settings-modal .settings-hint {
+  font-size: 0.72rem;
+  color: var(--text-ghost);
+  margin-top: 4px;
+}
+
+/* Checkbox toggle */
+#email-notify-toggle {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 40px;
+  height: 22px;
+  background: var(--glass-border);
+  border-radius: 11px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.3s;
+  outline: none;
+}
+
+#email-notify-toggle::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.3s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+}
+
+#email-notify-toggle:checked {
+  background: var(--accent);
+}
+
+#email-notify-toggle:checked::before {
+  transform: translateX(18px);
+}
+
+/* ═══════════════════════════════════════════════════════
+   Generic Icon Button (.btn-icon)
+   ═══════════════════════════════════════════════════════ */
+.btn-icon {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  font-size: 1.15rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 50%;
+  transition: background 0.2s, color 0.2s;
+}
+
+.btn-icon:hover {
+  background: var(--glass-bg);
+  color: var(--text-primary);
+}
+
+/* ═══════════════════════════════════════════════════════
+   Responsive / Mobile polish
+   ═══════════════════════════════════════════════════════ */
+@media (max-width: 480px) {
+  .penpal-card {
+    padding: 12px 14px;
+  }
+  .penpal-card-avatar {
+    width: 38px;
+    height: 38px;
+    font-size: 1rem;
+  }
+  .letter-card {
+    padding: 14px 16px 12px;
+  }
+  .letter-card-user {
+    margin-left: 12px;
+  }
+  .letter-card-ai {
+    margin-right: 12px;
+  }
+  .penpal-create-box {
+    padding: 40px 20px 30px;
+  }
+  .letter-compose textarea {
+    min-height: 56px;
+  }
+}
+
+/* Make sure screens stretch full height */
+#screen-mailbox-home.screen.active,
+#screen-penpal-detail.screen.active {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  overflow: hidden;
+}
+
+#screen-penpal-create.screen.active {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* === 信件折叠+信纸风格 === */
+
+/* 信封预览（折叠态） */
+.letter-card-envelope {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 0;
+  cursor: pointer;
+}
+.letter-card-envelope-icon {
+  font-size: 1.1rem;
+  opacity: 0.5;
+}
+.letter-card-envelope-date {
+  font-size: 0.68rem;
+  color: var(--text-ghost);
+  white-space: nowrap;
+}
+.letter-card-envelope-preview {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  font-family: "LXGW WenKai", "Noto Serif SC", serif;
+}
+.letter-card-fold-hint {
+  font-size: 0.65rem;
+  color: var(--accent-dim);
+  white-space: nowrap;
+  opacity: 0.7;
+}
+
+/* 信纸内容（展开态） */
+.letter-card-paper {
+  display: none;
+}
+.letter-expanded .letter-card-paper {
+  display: block;
+}
+.letter-expanded .letter-card-envelope {
+  display: none;
+}
+.letter-expanded .letter-card-fold-hint {
+  display: none;
+}
+
+/* 信纸样式覆盖原卡片 */
+.letter-card {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+.letter-card-user {
+  cursor: default;
+}
+
+/* AI信折叠态精简 */
+.letter-card-ai:not(.letter-expanded) {
+  padding: 12px 16px;
+  margin-right: 0;
+  border-right: none;
+  background: transparent;
+  border: 1px dashed var(--glass-border);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.letter-card-ai:not(.letter-expanded):hover {
+  border-color: var(--accent-dim);
+  background: var(--glass-bg);
+}
+
+/* 展开态信纸风格 */
+.letter-card.letter-expanded {
+  padding: 24px 22px 18px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 252, 248, 0.6),
+    rgba(255, 250, 245, 0.4)
+  );
+  border: 1px solid rgba(200, 185, 165, 0.2);
+  border-radius: 4px;
+  box-shadow: 0 2px 12px rgba(160, 140, 120, 0.06),
+              inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+[data-theme="dark"] .letter-card.letter-expanded {
+  background: linear-gradient(
+    180deg,
+    rgba(30, 40, 55, 0.6),
+    rgba(25, 35, 50, 0.4)
+  );
+  border-color: rgba(100, 120, 160, 0.15);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15),
+              inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* 用户信左边条改为底部线 */
+.letter-card-user.letter-expanded {
+  border-left: none;
+  margin-left: 0;
+}
+
+
+/* AI信展开态 */
+.letter-card-ai.letter-expanded {
+  border-right: none;
+  margin-right: 0;
+}
+
+
+/* === 信件磨砂玻璃+动画+美化 === */
+
+/* 隐藏头像 */
+.penpal-card-avatar { display: none !important; }
+
+/* 信件卡片磨砂玻璃 */
+.letter-card.letter-expanded {
+  background: var(--glass-bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 16px !important;
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04),
+              inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  border-left: none !important;
+  border-right: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+[data-theme="dark"] .letter-card.letter-expanded {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15),
+              inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* 展开动画 */
+.letter-card-paper {
+  display: none;
+  animation: letterUnfold 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.letter-expanded .letter-card-paper {
+  display: block;
+}
+@keyframes letterUnfold {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+    filter: blur(2px);
+  }
+  40% {
+    opacity: 0.6;
+    transform: translateY(-2px) scale(0.995);
+    filter: blur(0.5px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+/* 折叠态统一样式（AI和用户） */
+.letter-card:not(.letter-expanded) {
+  padding: 12px 16px !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  border-left: none !important;
+  border-right: none !important;
+  background: transparent !important;
+  border: 1px dashed var(--glass-border) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  cursor: pointer;
+}
+.letter-card:not(.letter-expanded):hover {
+  border-color: var(--accent-dim) !important;
+  background: var(--glass-bg) !important;
+}
+
+/* 用户折叠态图标区分 */
+.letter-card-user:not(.letter-expanded) .letter-card-envelope-preview {
+  color: var(--text-secondary);
+}
+
+/* Tab 美化 */
+.penpal-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 0;
+  padding: 8px 20px;
+  margin-bottom: 8px;
+}
+.penpal-tab {
+  background: none;
+  border: none;
+  color: var(--text-ghost);
+  font-family: LXGW WenKai, serif;
+  font-size: 0.88rem;
+  padding: 8px 20px;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.3s;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+.penpal-tab.active {
+  color: var(--text-primary);
+}
+.penpal-tab.active::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+}
+
+/* 碎片心声美化 */
+.fragment-intro {
+  text-align: center;
+  padding: 28px 20px 16px;
+}
+.fragment-intro-title {
+  font-family: LXGW WenKai, serif;
+  font-size: 1rem;
+  color: var(--text-primary);
+  letter-spacing: 0.12em;
+  margin-bottom: 6px;
+}
+.fragment-intro-hint {
+  font-size: 0.75rem;
+  color: var(--text-ghost);
+  letter-spacing: 0.06em;
+}
+.fragment-compose {
+  padding: 0 20px 16px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+.fragment-compose textarea {
+  flex: 1;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  padding: 12px 16px;
+  font-family: LXGW WenKai, serif;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  resize: none;
+  min-height: 42px;
+  max-height: 100px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: border-color 0.3s;
+}
+.fragment-compose textarea:focus {
+  outline: none;
+  border-color: var(--accent-dim);
+}
+.fragment-compose textarea::placeholder {
+  color: var(--text-ghost);
+}
+.btn-fragment-send {
+  background: var(--glass-bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 14px !important;
+  padding: 10px 18px !important;
+  font-family: LXGW WenKai, serif;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+.btn-fragment-send:hover {
+  border-color: var(--accent-dim) !important;
+  color: var(--text-primary);
+}
+
+/* 写信区域美化 */
+.letter-compose {
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+}
+.letter-compose textarea {
+  font-family: LXGW WenKai, serif !important;
+}
+
+/* 信件标签样式 */
+.letter-card-label {
+  margin-left: 8px;
+  font-size: 0.65rem;
+  letter-spacing: 0.04em;
+}
+.letter-label-ai {
+  color: var(--accent);
+}
+.letter-label-user {
+  color: var(--accent-dim);
+}
+
+/* 折叠/展开过渡 */
+.letter-card {
+  transition: all 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) !important;
+}
+
+/* === 移动端适配（信件+碎片+邮箱） === */
+@media (max-width: 480px) {
+  /* 信件折叠态 */
+  .letter-card:not(.letter-expanded) {
+    padding: 10px 14px !important;
+  }
+  .letter-card-envelope {
+    gap: 8px;
+  }
+  .letter-card-envelope-date {
+    font-size: 0.62rem;
+  }
+  .letter-card-envelope-preview {
+    font-size: 0.72rem;
+  }
+  .letter-card-fold-hint {
+    font-size: 0.6rem;
+  }
+
+  /* 信件展开态 */
+  .letter-card.letter-expanded {
+    padding: 18px 16px 14px !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+  .letter-card-content {
+    font-size: 0.82rem !important;
+    line-height: 1.7 !important;
+  }
+  .letter-card-date {
+    font-size: 0.62rem;
+  }
+  .letter-card-label {
+    font-size: 0.6rem;
+  }
+
+  /* Tab栏 */
+  .penpal-tabs {
+    padding: 6px 12px;
+  }
+  .penpal-tab {
+    font-size: 0.82rem;
+    padding: 7px 16px;
+  }
+
+  /* 碎片心声 */
+  .fragment-intro {
+    padding: 20px 16px 12px;
+  }
+  .fragment-intro-title {
+    font-size: 0.92rem;
+  }
+  .fragment-compose {
+    padding: 0 16px 12px;
+  }
+  .fragment-compose textarea {
+    font-size: 0.8rem;
+    padding: 10px 14px;
+    border-radius: 12px;
+  }
+  .btn-fragment-send {
+    padding: 8px 14px !important;
+    font-size: 0.78rem;
+    border-radius: 12px !important;
+  }
+
+  /* 写信区域 */
+  .letter-compose {
+    padding: 10px 14px;
+  }
+  .letter-compose textarea {
+    font-size: 0.82rem !important;
+    padding: 10px 14px;
+  }
+  .letter-compose-footer {
+    padding: 6px 0 0;
+  }
+  .letter-char-count {
+    font-size: 0.65rem;
+  }
+
+  /* 邮箱列表 */
+  .penpal-card {
+    border-radius: 14px;
+  }
+  .penpal-card-name {
+    font-size: 0.88rem;
+  }
+  .penpal-card-preview {
+    font-size: 0.72rem;
+  }
+
+  /* 头部 */
+  .penpal-detail-header {
+    padding: 12px 14px;
+  }
+  .penpal-detail-name {
+    font-size: 0.92rem;
+  }
+  .mailbox-header {
+    padding: 12px 14px;
+  }
+}
+
+/* 更小屏幕 */
+@media (max-width: 360px) {
+  .letter-card.letter-expanded {
+    padding: 14px 12px 10px !important;
+  }
+  .letter-card-content {
+    font-size: 0.78rem !important;
+  }
+  .penpal-tab {
+    font-size: 0.78rem;
+    padding: 6px 12px;
+  }
+  .fragment-compose {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .btn-fragment-send {
+    align-self: flex-end;
+  }
+}
+
+/* 心切按钮 */
+.btn-instant {
+  background: transparent;
+  border: 1px solid var(--accent-dim);
+  color: var(--accent);
+  font-size: 0.75rem;
+  padding: 6px 14px;
+  border-radius: 16px;
+  cursor: pointer;
+  font-family: 'LXGW WenKai', serif;
+  letter-spacing: 0.1em;
+  transition: all 0.3s ease;
+  opacity: 0.6;
+}
+.btn-instant:hover {
+  opacity: 1;
+  border-color: var(--accent);
+  box-shadow: 0 0 12px var(--accent-dim);
+}
+.btn-instant:active {
+  transform: scale(0.95);
+}
+
+/* === 寄出+心切按钮布局 === */
+.letter-compose-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.letter-compose-footer .letter-char-count {
+  margin-right: auto;
+}
+.btn-send {
+  white-space: nowrap;
+}
+
+/* 等待时隐藏寄出，只显示心切 */
+.letter-waiting ~ .letter-compose .btn-send#btn-send-letter {
+  /* JS handles disable */
+}
+
+/* ═══════════════════════════════════════════════════════
+   泡沫邮箱 — 移动端完整适配
+   ═══════════════════════════════════════════════════════ */
+
+/* safe-area（iPhone 刘海 + 底部横条） */
+@supports (padding-top: env(safe-area-inset-top)) {
+  .mailbox-home-header,
+  .penpal-detail-header {
+    padding-top: calc(12px + env(safe-area-inset-top));
+  }
+  .letter-compose,
+  .mailbox-home-footer {
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+}
+
+/* ── 中等屏幕 (≤600px) ── */
+@media (max-width: 600px) {
+  /* 邮箱主页 */
+  .mailbox-home-header {
+    padding: 14px 14px 10px;
+  }
+  .mailbox-home-title {
+    font-size: 1.05rem;
+  }
+  .mailbox-home-footer {
+    padding: 16px 14px 24px;
+  }
+  .mailbox-home-footer .btn-ghost {
+    font-size: 0.82rem;
+    padding: 10px 24px;
+  }
+
+  /* penpal 卡片 */
+  .penpal-list {
+    padding: 0 12px;
+  }
+  .penpal-card {
+    padding: 12px 14px;
+    gap: 10px;
+    border-radius: 12px;
+    margin-bottom: 6px;
+  }
+  .penpal-card-avatar {
+    width: 38px;
+    height: 38px;
+    font-size: 1rem;
+  }
+  .penpal-card-name {
+    font-size: 0.9rem;
+  }
+  .penpal-card-preview {
+    font-size: 0.75rem;
+  }
+  .penpal-card-time {
+    font-size: 0.68rem;
+  }
+
+  /* 来信封存 */
+  .mailbox-divider {
+    padding: 16px 12px 6px;
+    font-size: 0.7rem;
+  }
+  .legacy-mailbox {
+    padding: 0 12px 20px;
+  }
+  .legacy-card {
+    padding: 8px 12px;
+    gap: 8px;
+    border-radius: 8px;
+  }
+  .legacy-card-date,
+  .legacy-card-type {
+    font-size: 0.68rem;
+  }
+  .legacy-card-text {
+    font-size: 0.78rem;
+  }
+
+  /* 归档区 */
+  .archive-section {
+    padding: 0 12px;
+  }
+
+  /* 信友详情页 */
+  .penpal-detail-header {
+    padding: 14px 14px 6px;
+  }
+  .penpal-detail-name {
+    font-size: 1rem;
+  }
+
+  /* Tab 栏 */
+  .penpal-tabs {
+    padding: 0 12px;
+  }
+  .penpal-tab {
+    font-size: 0.84rem;
+    padding: 8px 0;
+  }
+
+  /* 信件时间线 */
+  .letter-timeline {
+    padding: 12px 12px 8px;
+  }
+  .letter-card {
+    padding: 16px 16px 12px;
+    margin-bottom: 12px;
+    border-radius: 14px;
+  }
+  .letter-card-user {
+    margin-left: 12px;
+  }
+  .letter-card-ai {
+    margin-right: 12px;
+  }
+  .letter-card-content {
+    font-size: 0.85rem;
+    line-height: 1.7;
+  }
+  .letter-card-date {
+    font-size: 0.65rem;
+  }
+
+  /* 等待动画 */
+  .letter-waiting {
+    padding: 20px 12px;
+  }
+  .waiting-envelope {
+    font-size: 1.6rem;
+  }
+  .waiting-text {
+    font-size: 0.82rem;
+  }
+
+  /* 写信区域 */
+  .letter-compose {
+    padding: 8px 12px 16px;
+  }
+  .letter-compose textarea {
+    min-height: 56px;
+    max-height: 100px;
+    padding: 10px 12px;
+    font-size: 0.85rem;
+    border-radius: 10px;
+  }
+  .letter-compose-footer {
+    margin-top: 6px;
+    gap: 8px;
+  }
+  .btn-send {
+    padding: 7px 16px;
+    font-size: 0.78rem;
+    border-radius: 14px;
+  }
+  .btn-instant {
+    padding: 5px 12px;
+    font-size: 0.72rem;
+    border-radius: 14px;
+  }
+
+  /* 碎片心声 */
+  .fragment-intro {
+    padding: 16px 12px 10px;
+  }
+  .fragment-intro-title {
+    font-size: 0.9rem;
+  }
+  .fragment-intro-hint {
+    font-size: 0.72rem;
+  }
+  .fragment-compose {
+    padding: 0 12px 10px;
+    gap: 8px;
+  }
+  .fragment-compose textarea {
+    padding: 8px 12px;
+    font-size: 0.82rem;
+    border-radius: 10px;
+  }
+  .btn-fragment-send {
+    padding: 8px 14px;
+    font-size: 0.78rem;
+    border-radius: 12px;
+  }
+  .fragment-today {
+    padding: 0 12px;
+  }
+  .fragment-item {
+    gap: 8px;
+    padding: 6px 0;
+  }
+  .fragment-time {
+    font-size: 0.64rem;
+  }
+  .fragment-text {
+    font-size: 0.82rem;
+  }
+  .fragment-digests {
+    padding: 0 12px 20px;
+  }
+  .fragment-digest {
+    padding: 12px 14px;
+    border-radius: 12px;
+  }
+  .fragment-digest-content {
+    font-size: 0.82rem;
+  }
+
+  /* 创建页 */
+  .penpal-create-box {
+    padding: 40px 20px 30px;
+    max-width: 90vw;
+  }
+  .penpal-create-title {
+    font-size: 1.15rem;
+  }
+  .penpal-input {
+    padding: 12px 14px;
+    font-size: 1rem;
+    border-radius: 10px;
+  }
+
+  /* 菜单弹出 */
+  .penpal-menu-popup {
+    top: 48px;
+    right: 12px;
+  }
+
+  /* 邮件设置弹窗 */
+  #mail-settings-modal .settings-row span {
+    font-size: 0.85rem;
+  }
+}
+
+/* ── 小屏幕 (≤400px) ── */
+@media (max-width: 400px) {
+  .mailbox-home-header {
+    padding: 12px 10px 8px;
+  }
+  .penpal-list {
+    padding: 0 10px;
+  }
+  .penpal-card {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+  .penpal-card-avatar {
+    width: 34px;
+    height: 34px;
+    font-size: 0.9rem;
+  }
+  .penpal-card-name {
+    font-size: 0.85rem;
+  }
+  .penpal-card-preview {
+    font-size: 0.7rem;
+  }
+
+  .penpal-detail-header {
+    padding: 10px 10px 4px;
+  }
+  .penpal-tabs {
+    padding: 0 10px;
+  }
+  .penpal-tab {
+    font-size: 0.8rem;
+    padding: 7px 0;
+  }
+
+  .letter-timeline {
+    padding: 10px 10px 6px;
+  }
+  .letter-card {
+    padding: 14px 14px 10px;
+    margin-bottom: 10px;
+    border-radius: 12px;
+  }
+  .letter-card-user {
+    margin-left: 8px;
+  }
+  .letter-card-ai {
+    margin-right: 8px;
+  }
+  .letter-card-content {
+    font-size: 0.82rem;
+    line-height: 1.65;
+  }
+
+  .letter-compose {
+    padding: 6px 10px 14px;
+  }
+  .letter-compose textarea {
+    min-height: 48px;
+    padding: 8px 10px;
+    font-size: 0.82rem;
+  }
+  .btn-send {
+    padding: 6px 14px;
+    font-size: 0.75rem;
+  }
+  .btn-instant {
+    padding: 4px 10px;
+    font-size: 0.68rem;
+  }
+
+  .fragment-compose {
+    padding: 0 10px 8px;
+  }
+  .fragment-compose textarea {
+    padding: 8px 10px;
+    font-size: 0.78rem;
+  }
+  .fragment-today {
+    padding: 0 10px;
+  }
+  .fragment-digests {
+    padding: 0 10px 16px;
+  }
+
+  .legacy-mailbox {
+    padding: 0 10px 16px;
+  }
+  .mailbox-divider {
+    padding: 14px 10px 4px;
+  }
+
+  .penpal-create-box {
+    padding: 32px 16px 24px;
+  }
+  .penpal-create-title {
+    font-size: 1.05rem;
+  }
+  .penpal-input {
+    font-size: 0.95rem;
+  }
+}
+
+/* ── 键盘弹出时 compose 不被遮挡 ── */
+@media (max-height: 500px) {
+  .letter-compose {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+  }
+  .letter-timeline {
+    padding-bottom: 4px;
+  }
+  .waiting-envelope {
+    font-size: 1.2rem;
+  }
+  .letter-waiting {
+    padding: 12px 8px;
+    gap: 6px;
+  }
+}
+
+/* ── 横屏 ── */
+@media (max-height: 440px) and (orientation: landscape) {
+  .penpal-detail-header {
+    padding: 6px 12px 4px;
+  }
+  .penpal-tabs {
+    padding: 0 12px;
+  }
+  .penpal-tab {
+    padding: 5px 0;
+    font-size: 0.78rem;
+  }
+  .letter-compose {
+    padding: 4px 12px 8px;
+  }
+  .letter-compose textarea {
+    min-height: 36px;
+    max-height: 60px;
+  }
+  .fragment-intro {
+    padding: 8px 12px 4px;
+  }
+  .fragment-compose {
+    padding: 0 12px 6px;
+  }
+}
+
+/* ── 触摸优化 ── */
+@media (hover: none) and (pointer: coarse) {
+  .penpal-card:hover {
+    transform: none;
+    box-shadow: none;
+  }
+  .penpal-card:active {
+    transform: scale(0.98);
+    transition: transform 0.1s;
+  }
+  .btn-send:hover {
+    transform: none;
+    opacity: 1;
+  }
+  .btn-send:active {
+    transform: scale(0.95);
+  }
+  .btn-instant:hover {
+    opacity: 0.6;
+    box-shadow: none;
+  }
+  .btn-instant:active {
+    transform: scale(0.93);
+    opacity: 1;
+  }
+  .legacy-card:hover {
+    transform: none;
+  }
+  .legacy-card:active {
+    transform: scale(0.98);
+  }
+  .letter-card {
+    -webkit-tap-highlight-color: transparent;
+  }
+  .penpal-menu-item {
+    padding: 14px 16px;
+  }
+}
+
+/* === 修复信件文字溢出 === */
+.letter-card {
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+.letter-card-content {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  max-width: 100%;
+}
+.letter-card-paper {
+  max-width: 100%;
+  overflow: hidden;
+}
+.letter-timeline {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+#screen-penpal-detail {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* ═══════════════════════════════════════════════════════
+   来信封存详情 — 移动端修复
+   ═══════════════════════════════════════════════════════ */
+.mailbox-detail-content {
+  align-items: flex-start !important;
+  padding: 20px !important;
+  box-sizing: border-box;
+}
+
+.mailbox-detail-content .letter-paper {
+  margin: auto 0;
+  flex-shrink: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+@media (max-width: 600px) {
+  .mailbox-detail-content {
+    padding: 12px !important;
+  }
+  .mailbox-detail-content .letter-paper {
+  margin: auto 0;
+  flex-shrink: 0;
+    padding: 28px 20px;
+    margin: 0;
+    font-size: 0.88rem;
+    line-height: 1.9;
+    min-height: auto;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 100%;
+  }
+  .mailbox-detail-content .letter-paper p {
+    margin-bottom: 4px;
+  }
+  .mailbox-detail-content .answer-result-card {
+    max-width: 100%;
+    margin: 0;
+    padding: 32px 20px;
+    box-sizing: border-box;
+  }
+  .mailbox-detail-footer {
+    padding: 12px 16px !important;
+  }
+}
+
+@media (max-width: 400px) {
+  .mailbox-detail-content {
+    padding: 8px !important;
+  }
+  .mailbox-detail-content .letter-paper {
+  margin: auto 0;
+  flex-shrink: 0;
+    padding: 24px 16px;
+    font-size: 0.84rem;
+    line-height: 1.8;
+    border-radius: 10px;
+  }
+}
+
+/* === 来信封存移动端修复 === */
+.letter-paper {
+  margin: auto 0;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+@media (max-width: 480px) {
+  .letter-paper {
+  margin: auto 0;
+  flex-shrink: 0;
+    padding: 28px 20px;
+    max-width: 100%;
+    font-size: 0.92rem;
+    line-height: 1.9;
+    min-height: auto;
+  }
+  .mailbox-detail-content {
+    padding: 8px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+}
+.legacy-mailbox,
+#legacy-mailbox {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* === 修复邮箱首页布局 === */
+.penpal-list {
+  flex: none !important;
+  overflow-y: visible !important;
+}
+
+/* 信友卡片和来信封存一致 */
+.penpal-card {
+  padding: 10px 14px;
+  border-radius: 10px;
+  gap: 10px;
+}
+
+
+
+/* 减少分割线上下间距 */
+.mailbox-divider {
+  margin-top: 16px !important;
+  margin-bottom: 12px !important;
+}
+
+/* 移动端 */
+@media (max-width: 480px) {
+  .penpal-card {
+    max-width: 100%;
+    padding: 12px 14px;
+  }
+  .penpal-card-body {
+    min-width: 0;
+    overflow: hidden;
+  }
+  .penpal-card-preview {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+  .penpal-card-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .legacy-mailbox .legacy-card {
+    max-width: 100%;
+  }
+}
+
+/* === 全局宽度约束 === */
+#screen-mailbox-home {
+  max-width: 100vw;
+  overflow-x: hidden !important;
+}
+.penpal-list {
+  padding: 0 16px !important;
+  box-sizing: border-box;
+  max-width: 100%;
+}
+.penpal-card {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+.penpal-card-body {
+  min-width: 0 !important;
+  flex: 1;
+  overflow: hidden;
+}
+.penpal-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-width: 0;
+}
+.penpal-card-name {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  flex: 1;
+  min-width: 0;
+}
+.penpal-card-preview {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  max-width: 100% !important;
+}
+.penpal-card-time {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.legacy-mailbox {
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box;
+}
+.legacy-card {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+.legacy-card-preview {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  min-width: 0;
+  flex: 1;
+}
+
+/* === 信友详情页全局约束 === */
+#screen-penpal-detail {
+  max-width: 100vw !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box;
+}
+.penpal-detail-header {
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 12px 16px !important;
+}
+.penpal-tabs {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.penpal-tab-content {
+  max-width: 100%;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+.letter-timeline {
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box;
+  padding: 0 14px !important;
+}
+.letter-card {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+.letter-card-content {
+  max-width: 100% !important;
+  word-break: break-word !important;
+}
+.letter-compose {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  padding: 10px 14px !important;
+}
+.letter-compose textarea {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* 碎片心声约束 */
+.fragment-intro {
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 20px 16px 12px !important;
+}
+.fragment-compose {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  padding: 0 14px 12px !important;
+}
+.fragment-compose textarea {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  min-width: 0 !important;
+}
+.fragment-scroll-area {
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box;
+}
+.fragment-today,
+.fragment-digests {
+  max-width: 100%;
+  overflow-x: hidden;
+  padding: 0 14px;
+  box-sizing: border-box;
+}
+
+/* 等待区域 */
+.letter-waiting {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* === 碎片心声底部输入栏优化 === */
+@media (max-width: 480px) {
+  .fragment-compose {
+    flex-direction: column !important;
+    gap: 8px !important;
+    padding: 8px 14px 14px !important;
+  }
+  .fragment-input-wrap {
+    width: 100%;
+  }
+  .fragment-input-wrap textarea {
+    width: 100% !important;
+    box-sizing: border-box;
+    min-height: 40px;
+    font-size: 0.82rem;
+  }
+  .fragment-actions {
+    display: flex;
+    width: 100%;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+  .btn-fragment-img {
+    width: 36px !important;
+    height: 36px !important;
+    border-radius: 10px !important;
+  }
+  .btn-fragment-send {
+    padding: 8px 14px !important;
+    font-size: 0.78rem !important;
+    border-radius: 10px !important;
+  }
+
+  /* 碎片消息气泡 */
+  .fragment-item,
+  .fragment-bubble {
+    max-width: 85% !important;
+    word-break: break-word;
+  }
+
+  /* AI回信卡片 */
+  .fragment-digest {
+    max-width: 100% !important;
+    box-sizing: border-box;
+  }
+  .fragment-digest-content {
+    font-size: 0.82rem !important;
+    line-height: 1.7 !important;
+    word-break: break-word;
+  }
+}
+
+/* === 信友详情页返回按钮修复 === */
+.penpal-detail-header .btn-back {
+  position: static !important;
+  flex-shrink: 0;
+}
+.penpal-detail-header {
+  gap: 8px;
+  padding: 14px 16px 8px !important;
+  align-items: center;
+}
+.penpal-detail-name {
+  flex: 1;
+  text-align: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* === 碎片日期分隔线 === */
+.fragment-day-divider {
+  display: flex;
+  align-items: center;
+  margin: 16px 0 12px;
+  gap: 12px;
+}
+.fragment-day-divider::before,
+.fragment-day-divider::after {
+  content: "";
+  flex: 1;
+  height: 0.5px;
+  background: var(--glass-border);
+  opacity: 0.6;
+}
+.fragment-day-divider span {
+  font-size: 0.65rem;
+  color: var(--text-ghost);
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  font-family: "LXGW WenKai", serif;
+}
+
+/* Fragment context menu (long press) */
+.fragment-context-menu {
+  position: fixed;
+  z-index: 9999;
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  padding: 6px 0;
+  min-width: 110px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.08), 0 2px 12px rgba(0, 0, 0, 0.04);
+  display: none;
+  animation: menuFadeIn 0.15s ease-out;
+}
+@keyframes menuFadeIn {
+  from { opacity: 0; transform: scale(0.92) translateY(4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.frag-menu-item {
+  padding: 11px 20px;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: 'LXGW WenKai', sans-serif;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+.frag-menu-item:hover {
+  background: rgba(100, 140, 200, 0.08);
+}
+.frag-menu-item:active {
+  background: rgba(100, 140, 200, 0.14);
+}
+.frag-menu-danger {
+  color: #d4686a;
+}
+.frag-menu-danger:hover {
+  background: rgba(212, 104, 106, 0.08);
+}
+
+.fragment-item {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Penpal menu danger item */
+.penpal-menu-danger {
+  color: #e57373 !important;
+}
+
+/* Mailbox empty guide button */
+.mailbox-empty-btn {
+  padding: 10px 28px;
+}
+
+/* Fragment AI reaction */
+.fragment-reaction {
+  font-size: 0.85rem;
+  margin-top: 2px;
+  opacity: 0;
+  animation: reactionAppear 0.4s ease-out forwards;
+}
+
+@keyframes reactionAppear {
+  0% { opacity: 0; transform: scale(0.5); }
+  50% { transform: scale(1.3); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* Instant button sending state */
+.btn-sending {
+  animation: sendingPulse 1.2s ease-in-out infinite !important;
+}
+@keyframes sendingPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* Mailbox user input display */
+.mailbox-user-input {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 14px;
+  font-family: 'LXGW WenKai', serif;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+.mailbox-user-label {
+  display: inline-block;
+  font-size: 0.68rem;
+  color: var(--text-ghost);
+  letter-spacing: 0.1em;
+  margin-right: 8px;
+  padding: 1px 6px;
+  border: 1px solid var(--glass-border);
+  border-radius: 4px;
+}
+
+/* Letter card reveal animation */
+.letter-card-reveal {
+  animation: cardReveal 0.6s ease-out;
+}
+@keyframes cardReveal {
+  0% { opacity: 0; transform: translateY(20px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* 信箱详情 — 用户问题（统一在卡片内） */
+.answer-question {
+  font-family: 'LXGW WenKai', serif;
+  font-size: 0.85rem;
+  color: var(--text-ghost);
+  text-align: center;
+  line-height: 1.8;
+  letter-spacing: 0.05em;
+  white-space: pre-wrap;
+}
+.answer-divider {
+  width: 40px;
+  height: 1px;
+  background: var(--glass-border);
+  margin: 20px auto;
+}
+
+/* 信箱详情 — 用户卡片（与 AI 卡片同风格） */
+.mailbox-user-card {
+  width: 100%;
+  max-width: 480px;
+  padding: 28px 32px;
+  margin-top: 16px;
+  border-radius: 16px;
+  text-align: center;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(30px) saturate(1.3);
+  -webkit-backdrop-filter: blur(30px) saturate(1.3);
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.3s both;
+}
+[data-theme="dark"] .mailbox-user-card {
+  background: rgba(10, 20, 30, 0.4);
+  border: 1px solid rgba(200, 198, 198, 0.05);
+}
+.mailbox-user-card-label {
+  font-size: 0.65rem;
+  color: var(--text-ghost);
+  letter-spacing: 0.15em;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+.mailbox-user-card-text {
+  font-family: 'LXGW WenKai', serif;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+@media (max-width: 600px) {
+  .mailbox-user-card {
+    max-width: 100%;
+    padding: 20px;
+    margin-top: 12px;
+  }
+}
+
+/* 信箱详情内容 — 纵向排列 */
+.mailbox-detail-content {
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  padding-top: 40px !important;
+}
+.mailbox-user-card-label { display: none; }
+
+/* 信件删除按钮 */
+.letter-card-actions {
+  text-align: right;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--glass-border);
+}
+.letter-delete-btn {
+  font-size: 0.7rem;
+  color: var(--text-ghost);
+  cursor: pointer;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  transition: color 0.2s, background 0.2s;
+}
+.letter-delete-btn:hover {
+  color: #e57373;
+  background: rgba(229, 115, 115, 0.1);
+}
+
+/* ═══════════════════════════════════════════════════════
+   统一系统提示 — Toast + Dialog
+   ═══════════════════════════════════════════════════════ */
+.fizz-toast {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-top: 20px;
+  pointer-events: none;
+}
+.fizz-toast-item {
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 12px 24px;
+  font-family: 'LXGW WenKai', sans-serif;
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  letter-spacing: 0.03em;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+  animation: toastIn 0.3s ease-out;
+  pointer-events: auto;
+}
+.fizz-toast-item.fizz-toast-error {
+  border-color: rgba(212,104,106,0.3);
+  color: #d4686a;
+}
+.fizz-toast-item.fizz-toast-out {
+  animation: toastOut 0.25s ease-in forwards;
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes toastOut {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-12px); }
+}
+
+/* Dialog */
+.fizz-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10001;
+  background: rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease-out;
+}
+.fizz-dialog {
+  background: var(--glass-bg);
+  backdrop-filter: blur(30px) saturate(1.4);
+  -webkit-backdrop-filter: blur(30px) saturate(1.4);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  padding: 28px 24px 20px;
+  width: 280px;
+  max-width: 85vw;
+  box-shadow: 0 12px 48px rgba(0,0,0,0.12);
+  animation: menuFadeIn 0.25s ease-out;
+}
+.fizz-dialog-msg {
+  font-family: 'LXGW WenKai', sans-serif;
+  font-size: 0.88rem;
+  color: var(--text-primary);
+  text-align: center;
+  line-height: 1.7;
+  margin-bottom: 20px;
+  white-space: pre-wrap;
+}
+.fizz-dialog-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: 'LXGW WenKai', sans-serif;
+  font-size: 0.85rem;
+  outline: none;
+  margin-bottom: 18px;
+  box-sizing: border-box;
+}
+.fizz-dialog-input:focus {
+  border-color: var(--accent-dim);
+}
+.fizz-dialog-btns {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.fizz-dialog-btn {
+  flex: 1;
+  padding: 10px 0;
+  border-radius: 10px;
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  font-family: 'LXGW WenKai', sans-serif;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.05em;
+}
+.fizz-btn-cancel {
+  color: var(--text-ghost);
+}
+.fizz-btn-cancel:hover {
+  background: rgba(100,140,200,0.06);
+}
+.fizz-btn-confirm {
+  color: var(--text-primary);
+  border-color: var(--accent-dim);
+}
+.fizz-btn-confirm:hover {
+  background: rgba(100,140,200,0.1);
+}
+.fizz-btn-danger {
+  color: #d4686a;
+  border-color: rgba(212,104,106,0.3);
+}
+.fizz-btn-danger:hover {
+  background: rgba(212,104,106,0.08);
+}
+
+/* Toggle arrow for 来信封存 */
+.mailbox-divider-toggle {
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.2s;
+}
+.mailbox-divider-toggle:hover {
+  opacity: 0.7;
+}
+.toggle-arrow {
+  font-size: 0.7rem;
+  transition: transform 0.2s;
+}
+
+/* Test mode toggle */
+.test-mode-toggle {
+  padding: 8px 16px;
+  text-align: center;
+}
+.test-mode-toggle label {
+  font-size: 0.72rem;
+  color: var(--text-ghost);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px dashed var(--glass-border);
+  transition: all 0.2s;
+}
+.test-mode-toggle input[type=checkbox] {
+  accent-color: #e57373;
+}
+.test-mode-active label {
+  color: #e57373;
+  border-color: rgba(229, 115, 115, 0.3);
+  background: rgba(229, 115, 115, 0.06);
+}
+
+/* ========== 字卡传讯 ========== */
+
+/* 输入屏 */
+.wordcard-input-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 40px 24px;
+  gap: 12px;
+}
+.wordcard-input-title {
+  font-family: 'LXGW WenKai', serif;
+  font-size: 1.5rem;
+  font-weight: 400;
+  letter-spacing: 0.15em;
+  opacity: 0.85;
+}
+.wordcard-input-subtitle {
+  font-family: 'Dancing Script', cursive;
+  font-size: 1.1rem;
+  opacity: 0.5;
+  margin-top: -8px;
+}
+.wordcard-input-hint {
+  font-size: 0.82rem;
+  opacity: 0.5;
+  margin-top: 8px;
+}
+#wordcard-question {
+  width: 72%;
+  max-width: 340px;
+  min-height: 60px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(180, 160, 140, 0.2);
+  background: rgba(255,255,255,0.06);
+  color: inherit;
+  font-family: 'LXGW WenKai', serif;
+  font-size: 0.92rem;
+  resize: none;
+  outline: none;
+  margin-top: 12px;
+  backdrop-filter: blur(6px);
+}
+#wordcard-question::placeholder { opacity: 0.35; }
+
+/* 结果屏 */
+.wordcard-result-stage {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 24px 16px 16px;
+}
+.wordcard-chat-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.wordcard-footer {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px 0 8px;
+  flex-wrap: wrap;
+}
+
+/* 轮次分隔符 */
+.wordcard-round-sep {
+  text-align: center;
+  opacity: 0.2;
+  font-size: 0.9rem;
+  letter-spacing: 0.5em;
+  margin: 16px 0 8px;
+}
+
+/* 卡片 item（含动画阶段） */
+.wordcard-item {
+  opacity: 0;
+  animation: wordcardAppear 0.4s ease forwards;
+}
+@keyframes wordcardAppear {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 翻转卡片 */
+.wordcard-flip-container {
+  width: 90px;
+  height: 50px;
+  perspective: 600px;
+  margin: 0 auto;
+}
+.wordcard-flip-inner {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.wordcard-item.flipping .wordcard-flip-inner {
+  transform: rotateY(180deg);
+}
+.wordcard-flip-front,
+.wordcard-flip-back {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  backface-visibility: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  font-family: 'LXGW WenKai', serif;
+}
+.wordcard-flip-front {
+  background: rgba(180, 160, 140, 0.12);
+  border: 1px solid rgba(180, 160, 140, 0.2);
+  font-size: 1.2rem;
+  opacity: 0.5;
+}
+.wordcard-flip-back {
+  background: rgba(180, 160, 140, 0.15);
+  border: 1px solid rgba(180, 160, 140, 0.25);
+  transform: rotateY(180deg);
+  font-size: 0.88rem;
+  color: inherit;
+}
+
+/* 变成气泡后 */
+.wordcard-item.to-bubble {
+  animation: none;
+  opacity: 1;
+}
+.wordcard-bubble {
+  display: inline-block;
+  max-width: 75%;
+  padding: 10px 18px;
+  border-radius: 18px 18px 18px 4px;
+  background: rgba(180, 160, 140, 0.1);
+  border: 1px solid rgba(180, 160, 140, 0.15);
+  font-family: 'LXGW WenKai', serif;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  opacity: 0;
+  animation: bubbleIn 0.4s ease forwards;
+  backdrop-filter: blur(4px);
+}
+@keyframes bubbleIn {
+  from { opacity: 0; transform: translateX(-8px) scale(0.95); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+/* 首页按钮样式 */
+.btn-wordcard {
+  background: rgba(180, 160, 140, 0.08) !important;
+  border: 1px solid rgba(180, 160, 140, 0.2) !important;
+}
+
+/* 存档样式 */
+.wordcard-archive {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.wordcard-archive-question {
+  font-size: 0.8rem;
+  opacity: 0.4;
+  text-align: center;
+  margin-bottom: 4px;
+}
+.wordcard-archive-round {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* 深色模式微调 */
+[data-theme="dark"] .wordcard-flip-front {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+[data-theme="dark"] .wordcard-flip-back {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+[data-theme="dark"] .wordcard-bubble {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+[data-theme="dark"] #wordcard-question {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* 移动端 */
+@media (max-width: 600px) {
+  .wordcard-flip-container {
+    width: 75px;
+    height: 42px;
+  }
+  .wordcard-bubble {
+    font-size: 0.86rem;
+    padding: 8px 14px;
+  }
+  .wordcard-footer {
+    gap: 10px;
+  }
+  #wordcard-question {
+    width: 85%;
+  }
+}

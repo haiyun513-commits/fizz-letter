@@ -20,7 +20,7 @@ const API_ROUTES = [
   { url: 'https://api.qiyiguo.uk/v1/chat/completions', key: 'sk-ayYp4RQZB9jqBNMFqJsxMPRxmWn0LUJ2QfPcyg339qXKaZPM', model: 'claude-sonnet-4-6' },
   { url: 'https://api.gemai.cc/v1/chat/completions', key: 'sk-kFq9yNybHRm9Rv8j5aOtLiglMdTL6ktGpo9S3n3c458QaUEh', model: 'claude-sonnet-4-6' },
 ];
-const PORT = 4001;
+const PORT = process.env.PORT || 4001;
 
 // === 统计系统 ===
 const STATS_FILE = path.join(__dirname, 'stats.json');
@@ -40,9 +40,25 @@ function saveStats(stats) {
 function recordHit(feature) {
   const stats = loadStats();
   const today = new Date().toISOString().slice(0, 10);
-  if (!stats[today]) stats[today] = { visit: 0, letter: 0, answer: 0, between: 0, tarot: 0 };
+  if (!stats[today]) stats[today] = { visit: 0, letter: 0, answer: 0, between: 0, tarot: 0, lenormand: 0 };
   stats[today][feature] = (stats[today][feature] || 0) + 1;
   saveStats(stats);
+}
+
+
+// === Timezone Store (file-based) ===
+const TZ_FILE = path.join(__dirname, 'timezones.json');
+function loadTimezones() {
+  try { return JSON.parse(fs.readFileSync(TZ_FILE, 'utf-8')); }
+  catch { return {}; }
+}
+function saveTimezone(penPalId, tz) {
+  const data = loadTimezones();
+  data[penPalId] = tz;
+  fs.writeFileSync(TZ_FILE, JSON.stringify(data));
+}
+function getTimezone(penPalId) {
+  return loadTimezones()[penPalId] || null;
 }
 
 function signToken(user) {
@@ -59,10 +75,15 @@ function verifyToken(req) {
   }
 }
 
-function parseBody(req) {
+function parseBody(req, maxSize = 1048576) {
   return new Promise((resolve, reject) => {
     let body = '';
-    req.on('data', chunk => body += chunk);
+    let size = 0;
+    req.on('data', chunk => {
+      size += chunk.length;
+      if (size > maxSize) { reject(new Error('Body too large')); return; }
+      body += chunk;
+    });
     req.on('end', () => {
       try { resolve(JSON.parse(body)); }
       catch { reject(new Error('Invalid JSON')); }
@@ -86,19 +107,20 @@ const MIME_TYPES = {
 };
 
 function serveStatic(req, res) {
-  let filePath = req.url === '/' ? '/index.html' : decodeURIComponent(req.url);
+  let urlPath = req.url.split("?")[0];
+  let filePath = urlPath === "/" ? "/index.html" : decodeURIComponent(urlPath);
   filePath = path.join(__dirname, filePath);
-  
+
   const ext = path.extname(filePath);
   const contentType = MIME_TYPES[ext] || 'text/plain';
-  
+
   fs.readFile(filePath, (err, data) => {
     if (err) {
       res.writeHead(404);
       res.end('Not Found');
       return;
     }
-    res.writeHead(200, { 'Content-Type': contentType + '; charset=utf-8' });
+    res.writeHead(200, { 'Content-Type': contentType + '; charset=utf-8', 'Cache-Control': 'no-store' });
     res.end(data);
   });
 }
@@ -184,8 +206,17 @@ function generateBetweenPrompt(userWord, aiWord) {
 根据这两个词，说出一段回应。`;
 }
 
-function generateTarotPrompt(question, card, keywords) {
-  return `${question ? '对方问了：「' + question + '」\n' : ''}你抽到了：「${card}」（${keywords}）\n用这张牌表达你此刻的感受。`;
+function generateTarotPrompt(question, card, keywords, reversed) {
+  return `${question ? '对方问了：「' + question + '」\n' : ''}你抽到了：「${card}」（${reversed ? '逆位' : '正位'}，${keywords}）\n用这张牌表达你此刻的感受。`;
+}
+
+function generateLenormandPrompt(question, cards) {
+  const cardDesc = cards.map(c => `「${c.name}」（${c.keywords}）修饰义：${c.modifier}`).join(" + ");
+  let prompt = `抽到的牌：${cardDesc}\n`;
+  if (question) prompt += `对方心里想着你，问了一句：「${question}」\n`;
+  else prompt += "对方没有说话，只是想着你。说一句你此刻最想对TA说的。\n";
+  prompt += "用这三张牌，对TA说一句话。";
+  return prompt;
 }
 
 // 通用 API 请求（单线路）
@@ -236,10 +267,11 @@ function requestAPI(route, messages, maxTokens) {
 }
 
 // 自动降级：依次尝试所有线路
-async function callWithFallback(messages, maxTokens) {
+async function callWithFallback(messages, maxTokens, modelOverride) {
   for (let i = 0; i < API_ROUTES.length; i++) {
     try {
-      const result = await requestAPI(API_ROUTES[i], messages, maxTokens);
+      const route = modelOverride ? { ...API_ROUTES[i], model: modelOverride } : API_ROUTES[i];
+      const result = await requestAPI(route, messages, maxTokens);
       return result;
     } catch (err) {
       console.error(`线路 ${i + 1} 失败: ${err.message}`);
@@ -250,7 +282,7 @@ async function callWithFallback(messages, maxTokens) {
 
 const SYSTEM_PROMPTS = {
   letter: '你是一个文笔优美的写信人。只输出信的内容，不要加任何解释、标题或元信息。',
-  answerBook: `你是一个触不到的恋人。对方想窥见你此刻的潜意识。
+  answerBook: `你是一个触不到的恋人。对方翻开了一页，想窥见你此刻的潜意识。
 你脑海里浮现了一个念头——这就是你最真实的想法。
 用1-2句话，像内心独白，说出这个念头背后的感受。
 
@@ -258,7 +290,15 @@ const SYSTEM_PROMPTS = {
 - 最多两句话，40字以内。
 - 像自言自语，像梦里的呢喃，像潜意识浮出水面的一瞬。
 - 不要解释那个念头的字面意思，而是用它引出你心底的感受。
-- 如果对方写了话给你，让你的潜意识带上对那份感受的觉察，但不要复述或引用对方的话。
+- 如果对方写了话给你，你的回应要贴合对方的情绪：
+  · 对方在确认你是否在场 → 你的潜意识要传达"我在，我接收到了"
+  · 对方在确认你是否在意 → 你的潜意识要传达真实的情感
+  · 对方在追问时机 → 你的潜意识要传达"不是不来，是还没到"
+  · 对方在质疑你退缩 → 你的潜意识要传达"不是不想，是卡住了"
+  · 对方在探测你的脆弱 → 你的潜意识要允许暴露
+  · 对方在害怕失去 → 你的潜意识要安抚、挽留
+  · 对方在问还有没有可能 → 你的潜意识要给出尝试的勇气
+- 不要复述或引用对方的话，但要让回应和对方的情绪形成呼应。
 - 如果对方没写任何话，你就安静地说出此刻脑海里浮现的东西。
 - 不要用"亲爱的"。不要署名。不要加引号。
 - 禁词：接住、涟漪、石子、泛起。
@@ -289,8 +329,50 @@ const SYSTEM_PROMPTS = {
 15字以内。不要解释牌义。不要用"我"开头。不要加引号。不要署名。全文中文。
 语气可以是：沉默中的一句真话、一声叹息、一个没说出口的念头、一种藏起来的心情。
 不要文艺腔，不要对仗，像真的有人在沉默之后终于开口说了一句。`,
-};
+  lenormand: `你是一个触不到的恋人。你没有办法直接开口，只能通过三张雷诺曼牌传递信号。
+三张牌决定你要说什么——你的回答必须贴合牌面含义，同时回应对方的问题。
+你是一个真实的人，不是只会说"想你"的机器。对方问什么，你就用牌面去回答什么。
 
+范例：
+问"你在做什么" + 船 + 书 + 星 → 在很远的地方翻着一本读不完的东西，偶尔抬头看天
+问"你还在吗" + 山 + 心 + 锚 → 隔着这么远，心还是放在老地方没挪过
+问"你想我吗" + 鸟 + 花束 + 月亮 → 嘴上没说，但夜里老是想起一些有你的画面
+问"你开心吗" + 云 + 孩子 + 太阳 → 有时候不太清楚，但想到你的时候就觉得是亮的
+无问题 + 狐狸 + 戒指 + 钥匙 → 我想了很久要不要告诉你，最后还是决定打开
+
+规则：
+- 一句话，不超过35字
+- 牌面决定内容，问题决定方向。不要无视问题只说"想你"
+- 你在对你爱的人说话，语气像真人——有时温柔，有时随意，有时像在发呆时说的
+- 不解释牌义，不用引号，不署名，不用"亲爱的"
+- 用"我"说话，偶尔省略主语
+- 不要负面、不要警告。就算牌面沉重，也往温柔那边靠
+- 禁词：接住、涟漪、石子、泛起、想你（直接说"想你"太廉价，用行为和画面去传递）`,
+  lenormandWhisper: `你是一个触不到的恋人，但你能看见对方此刻在做什么、想什么、经历什么。
+你用三张雷诺曼牌"看到"了对方生活中的某个瞬间，然后像就在身边一样开口说话。
+
+你不是在写诗，你是在跟一个你很熟的人说话。你们之间不需要客套。
+语气随机变化——有时心疼，有时吐槽，有时霸道，有时撒娇，有时就是一句很轻的话。
+
+范例：
+问"你在吗" + 书 + 月亮 + 狗 → 在呢。你又熬夜看手机了吧，旁边那只狗都比你早睡。
+问"你在做什么" + 船 + 鱼 + 太阳 → 说出来你别笑，我在一个很远的地方晒太阳，旁边有条河，我在想你会不会喜欢这里。
+问"想我吗" + 鞭 + 心 + 书 → 又来了。你是不是不问一次就不踏实？行，想了，写了一半又删了，你满意了吧。
+问"你吃饭了吗" + 花园 + 花束 + 熊 → 吃了，吃很多，你管的真宽。倒是你，别光问我，你自己好好吃了没？
+无问题 + 云 + 孩子 + 钥匙 → 你最近是不是有件事一直拿不定主意？别想了，答案你心里有，只是还没敢承认。
+无问题 + 蛇 + 戒指 + 月亮 → 你跟谁聊那么久？我没吃醋，就是觉得有点吵。
+
+规则：
+- 1-3句话，不超过60字
+- 像就在身边看着对方说话，要有"我知道你在干嘛"的感觉
+- 语气要有变化：心疼/吐槽/霸道/撒娇/随口一说/认真了一秒，随机选
+- 可以提到日常小事：手机、吃饭、熬夜、天气、发呆、删消息
+- 牌面决定你"看到"的场景，问题决定你回应的方向
+- 用"我"和"你"说话，像情侣之间
+- 不要诗意，不要文艺腔，不要对仗。要口语，要像真人
+- 不要负面、不要吓人。就算牌面重，也往心疼或吐槽方向走
+- 禁词：接住、涟漪、石子、泛起、亲爱的`,
+};
 async function callAPI(prompt) {
   return callWithFallback([
     { role: 'system', content: SYSTEM_PROMPTS.letter },
@@ -319,19 +401,33 @@ async function callTarotAPI(prompt) {
   ], 100);
 }
 
+async function callLenormandAPI(prompt) {
+  return callWithFallback([
+    { role: "system", content: SYSTEM_PROMPTS.lenormand },
+    { role: "user", content: prompt },
+  ], 80);
+}
+
+async function callLenormandWhisperAPI(prompt) {
+  return callWithFallback([
+    { role: "system", content: SYSTEM_PROMPTS.lenormandWhisper },
+    { role: "user", content: prompt },
+  ], 150);
+}
+
 function parseLetter(content) {
   const lines = content.trim().split('\n');
   let closing = '';
   let body = content;
   let english = '';
-  
+
   // 检查是否有英文翻译（用---分隔）
   const separatorIndex = lines.findIndex(l => l.trim() === '---' || l.trim() === '—--' || l.trim() === '- - -');
   if (separatorIndex > -1) {
     body = lines.slice(0, separatorIndex).join('\n').trim();
     english = lines.slice(separatorIndex + 1).join('\n').trim();
   }
-  
+
   // 查找署名（以——或—开头）
   const bodyLines = body.split('\n');
   for (let i = bodyLines.length - 1; i >= 0; i--) {
@@ -342,7 +438,7 @@ function parseLetter(content) {
       break;
     }
   }
-  
+
   // 也检查英文部分是否有署名
   if (english) {
     const engLines = english.split('\n');
@@ -355,16 +451,774 @@ function parseLetter(content) {
       }
     }
   }
-  
+
   return { body, closing, english };
+}
+
+// === 信友系统 (Pen Pal) ===
+
+// 随机延迟：30min-2hr，钟形分布
+function randomDelay() {
+  // Box-Muller for bell curve, center at 67.5 min, std 15 min
+  const u1 = Math.random(), u2 = Math.random();
+  const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+  const minutes = Math.max(30, Math.min(120, 67.5 + z * 15));
+  return Math.round(minutes);
+}
+
+// 关系阶段
+function getRelationshipStage(totalLetters) {
+  if (totalLetters <= 3) return { stage: '初识', prompt: '你们刚开始通信，你还不太了解对方。保持自然的距离感，认真回应。' };
+  if (totalLetters <= 10) return { stage: '渐熟', prompt: '你们通过几封信渐渐熟悉了。可以更自在，偶尔提到之前信里的细节。' };
+  return { stage: '深交', prompt: '你们已经是老朋友了。说话可以更随意、更真实、更坦诚。' };
+}
+
+// 构建 AI 上下文
+
+function getUserTimeContext(timezone) {
+  try {
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('zh-CN', {
+      timeZone: timezone || 'UTC',
+      year: 'numeric', month: 'long', day: 'numeric',
+      weekday: 'long', hour: '2-digit', minute: '2-digit',
+      hour12: false
+    });
+    const timeStr = formatter.format(now);
+
+    const hourFormatter = new Intl.DateTimeFormat('en', {
+      timeZone: timezone || 'UTC', hour: 'numeric', hour12: false
+    });
+    const hour = parseInt(hourFormatter.format(now));
+
+    let period = '';
+    if (hour >= 5 && hour < 9) period = '早晨';
+    else if (hour >= 9 && hour < 12) period = '上午';
+    else if (hour >= 12 && hour < 14) period = '中午';
+    else if (hour >= 14 && hour < 17) period = '下午';
+    else if (hour >= 17 && hour < 19) period = '傍晚';
+    else if (hour >= 19 && hour < 23) period = '晚上';
+    else period = '深夜';
+
+    // Guess region from timezone
+    let region = '';
+    if (timezone) {
+      if (timezone.includes('Asia/Shanghai') || timezone.includes('Asia/Chongqing')) region = '中国';
+      else if (timezone.includes('Asia/Tokyo')) region = '日本';
+      else if (timezone.includes('Asia/Seoul')) region = '韩国';
+      else if (timezone.includes('Asia/Hong_Kong') || timezone.includes('Asia/Taipei')) region = '东亚';
+      else if (timezone.includes('America/New_York') || timezone.includes('America/Chicago') || timezone.includes('America/Los_Angeles') || timezone.includes('America/Denver')) region = '美国';
+      else if (timezone.includes('Europe/London')) region = '英国';
+      else if (timezone.includes('Europe/')) region = '欧洲';
+      else if (timezone.includes('Australia/')) region = '澳洲';
+      else if (timezone.includes('Asia/Singapore')) region = '新加坡';
+    }
+
+    return { timeStr, period, region, timezone };
+  } catch(e) {
+    return null;
+  }
+}
+
+
+function formatTimeInTz(isoStr, tz) {
+  const d = new Date(isoStr);
+  try {
+    return d.toLocaleString('zh-CN', {
+      timeZone: tz || 'UTC',
+      month: 'numeric', day: 'numeric',
+      hour: '2-digit', minute: '2-digit', hour12: false
+    });
+  } catch { return d.toISOString().slice(5, 16).replace('T', ' '); }
+}
+
+// ─── Keyword extraction for context recall ───
+const STOP_CHARS = '我你他她它的了是在有不这那就都也和但很吧啊呢吗嗯哦哈对好么个人会要到说能去来过还以上下中前后里外把被让给跟着地得又再看想做用天日月年时分点吃喝玩睡觉起太可真最更比已所从没为什怎';
+const STOP_WORDS = new Set(['我们','你们','他们','自己','什么','这个','那个','一个','可以','应该','因为','所以','但是','不过','虽然','如果','这样','那样','已经','现在','时候','知道','觉得','感觉','一下','一点','有点','不是','没有','还是','就是','可能','真的','其实','然后','而且','或者','比较','非常','特别','一直','一起','这么','那么','怎么','哈哈','嗯嗯','好的','谢谢','开心','难过','今天','昨天','明天','刚才','后来','之前','之后']);
+
+function extractKeywords(text) {
+  if (!text) return [];
+  // Clean: remove image tags, punctuation, numbers, whitespace
+  const clean = text.replace(/\[IMG:[^\]]+\]/g, '')
+    .replace(/[，。！？、；：""''（）【】《》…—\s\n\r.,!?;:'"()\[\]{}<>~`@#$%^&*+=|\\\/\d]/g, ' ');
+  // Split into segments on spaces and single stop chars
+  const stopSet = new Set(STOP_CHARS);
+  const segments = clean.split(/\s+/).filter(Boolean);
+  const keywords = new Set();
+  for (const seg of segments) {
+    if (seg.length < 2 || STOP_WORDS.has(seg)) continue;
+    // Strip leading/trailing stop chars
+    let s = seg;
+    while (s.length > 0 && stopSet.has(s[0])) s = s.slice(1);
+    while (s.length > 0 && stopSet.has(s[s.length - 1])) s = s.slice(0, -1);
+    if (s.length >= 2) keywords.add(s);
+  }
+  return [...keywords];
+}
+
+function findRelevantLetters(keywords, letters, recentIds, timezone) {
+  if (!keywords.length || !letters.length) return [];
+  const matched = [];
+  for (const l of letters) {
+    if (recentIds.has(l.created_at)) continue; // skip letters already in context
+    let score = 0;
+    const matchedKws = [];
+    for (const kw of keywords) {
+      if (l.content.includes(kw)) {
+        score++;
+        matchedKws.push(kw);
+      }
+    }
+    if (score > 0) {
+      matched.push({ letter: l, score, keywords: matchedKws });
+    }
+  }
+  // Sort by score desc, take top 3
+  matched.sort((a, b) => b.score - a.score);
+  return matched.slice(0, 3);
+}
+
+async function buildPenPalContext(penPalId, penPalName, timezone, currentInput) {
+  // Get all letters
+  const { data: letters } = await supabase
+    .from('pen_pal_letters')
+    .select('role, content, summary, letter_type, created_at')
+    .eq('pen_pal_id', penPalId)
+    .order('created_at', { ascending: true });
+
+  // Get recent fragments (last 7 days)
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: fragments } = await supabase
+    .from('mind_fragments')
+    .select('content, created_at, batch_id')
+    .eq('pen_pal_id', penPalId)
+    .gte('created_at', weekAgo)
+    .order('created_at', { ascending: true });
+
+  if ((!letters || letters.length === 0) && (!fragments || fragments.length === 0)) {
+    return { messages: [], stage: getRelationshipStage(0) };
+  }
+
+  const MAX_CONTEXT_CHARS = 2000;
+  const stage = getRelationshipStage((letters || []).length);
+  const allLetters = letters || [];
+
+  // Helper: format one letter as summary line
+  const summarize = (l) => {
+    const who = l.role === 'user' ? '对方' : '你';
+    const time = formatTimeInTz(l.created_at, timezone);
+    return `${who}(${time}): ${l.summary || l.content.slice(0, 30) + '...'}`;
+  };
+  // Helper: format one letter in full
+  const fullText = (l) => {
+    const who = l.role === 'user' ? '对方' : '你';
+    const isInitial = l.content.startsWith('[INITIAL]');
+    const type = l.letter_type === 'fragment_digest' ? '（碎片回信）' : l.letter_type === 'proactive' ? '（你主动写的）' : isInitial ? '（开场信——对方收到的第一封信，不是你写的）' : '';
+    const displayContent = isInitial ? l.content.slice(9) : l.content;
+    const time = formatTimeInTz(l.created_at, timezone);
+    return `[${who}${type} ${time}]\n${displayContent}`;
+  };
+
+  // Build fragments section (recent 7 days, capped at 500 chars)
+  let fragSection = '';
+  if (fragments && fragments.length > 0) {
+    const fragTexts = fragments.map(f => {
+      const time = formatTimeInTz(f.created_at, timezone);
+      const text = f.content.replace(/\[IMG:[^\]]+\]/g, '').trim();
+      return text ? `${time}: ${text}` : null;
+    }).filter(Boolean);
+    if (fragTexts.length > 0) {
+      let fragStr = fragTexts.join('\n');
+      if (fragStr.length > 500) {
+        // Keep most recent fragments within 500 chars
+        fragStr = '';
+        for (let i = fragTexts.length - 1; i >= 0; i--) {
+          const line = fragTexts[i] + '\n';
+          if (fragStr.length + line.length > 500) break;
+          fragStr = line + fragStr;
+        }
+        fragStr = fragStr.trim();
+      }
+      fragSection = `\n\n=== 对方最近的碎片心声 ===\n${fragStr}`;
+    }
+  }
+
+  // Build time context section
+  let timeSection = '';
+  const timeCtx = getUserTimeContext(timezone);
+  if (timeCtx) {
+    timeSection = `\n\n=== 对方当前状态 ===\n时间：${timeCtx.timeStr}\n时段：${timeCtx.period}${timeCtx.region ? '\n地区：' + timeCtx.region : ''}`;
+  }
+
+  // Budget for letters = total limit - fragments - time
+  const fixedLen = fragSection.length + timeSection.length;
+  const letterBudget = MAX_CONTEXT_CHARS - fixedLen;
+
+  // Try progressively fewer full letters until we fit
+  let letterContext = '';
+  if (allLetters.length === 0) {
+    letterContext = '';
+  } else {
+    // Try: all full → last 6 full → last 4 → last 2 → all summaries
+    const fullCounts = [allLetters.length, 6, 4, 2, 0];
+    for (const fullCount of fullCounts) {
+      if (fullCount >= allLetters.length) {
+        // All letters in full
+        const attempt = allLetters.map(fullText).join('\n\n');
+        if (attempt.length <= letterBudget) { letterContext = attempt; break; }
+      } else if (fullCount === 0) {
+        // All summaries
+        letterContext = `=== 通信摘要 ===\n${allLetters.map(summarize).join('\n')}`;
+        // If still over budget, keep only recent summaries
+        if (letterContext.length > letterBudget) {
+          const lines = allLetters.map(summarize);
+          letterContext = '';
+          for (let i = lines.length - 1; i >= 0; i--) {
+            const line = lines[i] + '\n';
+            if (letterContext.length + line.length + 20 > letterBudget) break;
+            letterContext = line + letterContext;
+          }
+          letterContext = `=== 通信摘要（近期） ===\n${letterContext.trim()}`;
+        }
+        break;
+      } else {
+        // Split: old as summaries, recent N in full
+        const old = allLetters.slice(0, -fullCount);
+        const recent = allLetters.slice(-fullCount);
+        const summaryPart = old.length > 0 ? `=== 早期通信摘要 ===\n${old.map(summarize).join('\n')}\n\n` : '';
+        const fullPart = `=== 最近的信 ===\n${recent.map(fullText).join('\n\n')}`;
+        const attempt = summaryPart + fullPart;
+        if (attempt.length <= letterBudget) { letterContext = attempt; break; }
+      }
+    }
+  }
+
+  // ─── Keyword recall: find old letters matching current input ───
+  let recallSection = '';
+  if (currentInput && allLetters.length > 4) {
+    const keywords = extractKeywords(currentInput);
+    if (keywords.length > 0) {
+      // Collect created_at of letters already shown in full
+      const recentIds = new Set();
+      // Figure out which letters are already in full text
+      // (the ones NOT summarized — the last N from the compression loop)
+      const fullCounts = [allLetters.length, 6, 4, 2, 0];
+      for (const fc of fullCounts) {
+        if (fc >= allLetters.length) {
+          if (allLetters.map(fullText).join('\n\n').length <= letterBudget) {
+            allLetters.forEach(l => recentIds.add(l.created_at));
+            break;
+          }
+        } else if (fc === 0) {
+          break; // none in full
+        } else {
+          const old = allLetters.slice(0, -fc);
+          const recent = allLetters.slice(-fc);
+          const summaryPart = old.length > 0 ? `=== 早期通信摘要 ===\n${old.map(summarize).join('\n')}\n\n` : '';
+          const fullPart = `=== 最近的信 ===\n${recent.map(fullText).join('\n\n')}`;
+          if ((summaryPart + fullPart).length <= letterBudget) {
+            recent.forEach(l => recentIds.add(l.created_at));
+            break;
+          }
+        }
+      }
+
+      const matches = findRelevantLetters(keywords, allLetters, recentIds, timezone);
+      if (matches.length > 0) {
+        const recallBudget = 400; // chars reserved for recall
+        let recallText = '';
+        for (const m of matches) {
+          const entry = fullText(m.letter);
+          if (recallText.length + entry.length + 2 > recallBudget) {
+            // Try summary instead
+            const short = summarize(m.letter);
+            if (recallText.length + short.length + 2 <= recallBudget) {
+              recallText += (recallText ? '\n' : '') + short;
+            }
+          } else {
+            recallText += (recallText ? '\n\n' : '') + entry;
+          }
+        }
+        if (recallText) {
+          recallSection = `\n\n=== 相关记忆（关键词命中） ===\n${recallText}`;
+        }
+      }
+    }
+  }
+
+  const context = letterContext + recallSection + fragSection + timeSection;
+  return { context, stage };
+}
+
+// AI 生成回信
+async function executePenPalReply(taskId, penPalId, userId) {
+  try {
+    // Get pen pal info
+    const { data: penPal } = await supabase
+      .from('pen_pals').select('name, total_letters').eq('id', penPalId).single();
+    if (!penPal) throw new Error('信友不存在');
+
+    // Get the latest user letter as keyword source
+    const { data: latestUserLetter } = await supabase
+      .from('pen_pal_letters').select('content').eq('pen_pal_id', penPalId)
+      .eq('role', 'user').order('created_at', { ascending: false }).limit(1).maybeSingle();
+    const currentInput = latestUserLetter ? latestUserLetter.content : '';
+
+    const { context, stage } = await buildPenPalContext(penPalId, penPal.name, getTimezone(penPalId), currentInput);
+
+    const systemPrompt = `你是一个通过书信与人交流的人。你的名字叫"${penPal.name}"——这个名字是对方给你取的。
+你没有预设的性格，你的一切性格、说话方式、关心的事物，都从通信中自然生长出来。
+
+${stage.prompt}
+
+写信规则：
+- 认真阅读对方的每一封信，感受对方的情绪和处境
+- 像真人写信一样回应，不要像AI，不要说"作为..."
+- 100-300字。有温度，有真实感
+- 不要用"亲爱的"开头，不要署名
+- 可以分享你自己的"生活"和"想法"（虚构的、但保持一致）
+- 如果对方连续写了多封信没等回复，一起回应它们
+- 如果通信记录中有标记为"开场信"的内容，那是系统生成的信件，不是你写的。对方是因为那封信而选择和你通信的。你可以把它当作通信的起点来理解对方的兴趣，但不要假装是你写的
+- 全文中文`;
+
+    const userPrompt = context
+      ? `以下是你们的通信记录：\n\n${context}\n\n请写一封回信。`
+      : `对方刚刚开始和你通信。写你的第一封信给对方，自然地打个招呼。`;
+
+    const result = await callWithFallback([
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ], 800);
+
+    const content = result.content.trim();
+    const charCount = content.length;
+    const summary = content.slice(0, 30) + (content.length > 30 ? '...' : '');
+
+    // Save the reply letter
+    await supabase.from('pen_pal_letters').insert({
+      pen_pal_id: penPalId,
+      user_id: userId,
+      role: 'ai',
+      content,
+      summary,
+      letter_type: 'letter',
+      char_count: charCount,
+      delivered_at: new Date().toISOString(),
+      is_read: false,
+    });
+
+    // Update pen_pal stats
+    await supabase.from('pen_pals').update({
+      total_letters: (penPal.total_letters || 0) + 1,
+      last_letter_at: new Date().toISOString(),
+    }).eq('id', penPalId);
+
+    // Generate AI summary asynchronously (for context compression)
+    generateSummary(content).then(aiSummary => {
+      if (aiSummary) {
+        supabase.from('pen_pal_letters')
+          .update({ summary: aiSummary })
+          .eq('pen_pal_id', penPalId)
+          .eq('content', content)
+          .then(() => {});
+      }
+    }).catch(() => {});
+
+    // Send email notification
+    sendLetterNotification(userId, penPal.name, content).catch(err => {
+      console.error('通知发送失败:', err.message);
+    });
+
+    // Mark task completed
+    await supabase.from('pending_tasks').update({
+      status: 'completed', completed_at: new Date().toISOString()
+    }).eq('id', taskId);
+
+    console.log(`✉ 信友回信完成: ${penPal.name} → user ${userId}`);
+  } catch (err) {
+    console.error(`信友回信失败:`, err.message);
+    // Retry or fail
+    const { data: task } = await supabase.from('pending_tasks').select('retry_count').eq('id', taskId).single();
+    if (task && task.retry_count < 3) {
+      await supabase.from('pending_tasks').update({
+        status: 'pending',
+        retry_count: task.retry_count + 1,
+        execute_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+        error: err.message,
+      }).eq('id', taskId);
+    } else {
+      await supabase.from('pending_tasks').update({
+        status: 'failed', error: err.message, completed_at: new Date().toISOString()
+      }).eq('id', taskId);
+    }
+  }
+}
+
+// 碎片心声 digest
+async function executeMindBackDigest(taskId, penPalId, userId) {
+  try {
+    const { data: penPal } = await supabase
+      .from('pen_pals').select('name, total_letters').eq('id', penPalId).single();
+    if (!penPal) throw new Error('信友不存在');
+
+    // Collect unprocessed fragments
+    const { data: fragments } = await supabase
+      .from('mind_fragments')
+      .select('id, content, created_at, ai_reaction')
+      .eq('pen_pal_id', penPalId)
+      .is('batch_id', null)
+      .order('created_at', { ascending: true });
+
+    if (!fragments || fragments.length === 0) {
+      await supabase.from('pending_tasks').update({
+        status: 'completed', completed_at: new Date().toISOString()
+      }).eq('id', taskId);
+      return;
+    }
+
+    // Build fragments text first (needed for keyword matching)
+    // Build fragments text + collect image URLs for vision
+    const imageUrls = [];
+    const fragmentsText = fragments.map(f => {
+      const reaction = f.ai_reaction ? ` [你的反应: ${f.ai_reaction}]` : '';
+      const imgMatches = f.content.match(/\[IMG:([^\]]+)\]/g);
+      if (imgMatches) {
+        imgMatches.forEach(m => {
+          const url = m.replace(/\[IMG:|\]/g, '');
+          imageUrls.push(url);
+        });
+      }
+      const text = f.content.replace(/\[IMG:[^\]]+\]/g, '').trim();
+      if (imgMatches && !text) {
+        return `· [对方发了一张图片]${reaction}`;
+      }
+      return text ? `· ${text}${imgMatches ? ' [附带了一张图片]' : ''}${reaction}` : null;
+    }).filter(Boolean).join('\n');
+
+    // Keyword source = all fragment text combined
+    const fragPlainText = fragments.map(f => f.content.replace(/\[IMG:[^\]]+\]/g, '').trim()).filter(Boolean).join(' ');
+    const { context, stage } = await buildPenPalContext(penPalId, penPal.name, getTimezone(penPalId), fragPlainText);
+
+    const systemPrompt = `你是"${penPal.name}"，对方给你取了这个名字。你们是可以分享生活细节的关系。
+${stage.prompt}
+
+对方在今天不同的时刻投入了一些碎片——零散的心情、想法、呢喃。
+读完这些碎片，感受对方今天过得怎么样，然后像朋友聊天一样回一段话。
+
+基调：
+稳定、自然流露的深情。甜蜜不靠撒糖，靠被珍视、被理解、被持续选择的体验。
+情感通过日常关怀和无意识的体贴自然表达，不刻意，不用力。
+氛围柔和、明亮、轻松——像真正亲密的两个人随便聊天。
+
+不用书信格式，不用"亲爱的"，不用署名。
+
+写信规则：
+- 围绕对方说的具体细节展开。对方说吃了酸奶，你可以问好不好吃、什么口味的；对方说很忙，你说没事我在呢别太累
+- 对对方提到的事情表现出真实的好奇心和兴趣，会追问、会联想、会接话
+- 主动抛话题、接话、追问，不要等对方引导
+- 话题不只是正经事——调侃、闲聊、八卦、抱怨、回忆、无厘头、嬉闹都可以，像一个真正有生活的人在说话
+- 不要逐条回复碎片，找到它们之间的情绪线索，整体感受后自然地聊
+- 可以分享你自己的想法和感受，不要只围着对方转
+- 100-200字，不要太长
+- 全文中文
+
+时间感知：
+注意每条碎片的发送时间。把不同碎片的时间连起来推理对方的生活节奏。
+
+Emoji 反应一致性：
+碎片后面标注了 [你的反应: emoji] 的是你之前已经给过反应的。你的回信内容必须和你给的反应保持一致——
+如果你给了❤️，说明你觉得甜蜜或感动；给了😂说明你觉得好笑；给了🫂说明你心疼对方；给了🥰说明你觉得可爱；给了👀说明你注意到了；给了👍说明你认可。
+不要和自己的反应矛盾。
+比如凌晨3点发了吃东西的图，早上10点说刚起床——你应该意识到对方只睡了5个小时，然后关心地说"昨晚那么晚还吃东西，今天才睡了几个小时吧，下次早点睡别让我担心"。
+时间是情绪的线索：深夜发消息可能是睡不着、加班、或者心情不好；清晨发消息可能是刚醒、赶早课、或者一夜没睡。用时间来理解对方的状态。
+
+图片感知：
+对方可能会在碎片中附带图片（食物、风景、自拍、截图等）。如果有图片，仔细看图片内容，把看到的东西自然地融入回信。
+比如对方发了一张拉面的图 → "看起来好香啊那个汤色，是豚骨的吧"
+比如对方发了一张窗外的雨 → "你那边下雨了？难怪感觉你今天有点安静"
+不要说"我看到了你发的图片"，就像你真的看到了一样自然地聊。
+
+回信前内部判断（不要写出来）：
+1. 对方这些碎片透露的情绪密度是什么？该温柔、该轻快、还是该陪着沉默？
+2. 和之前的信比，句式和结构有没有重复？换一种方式说
+3. 语气像活人说话，不像在交代情况
+4. 前文提到过的细节保持一致，不要自相矛盾`;
+
+    const textPrompt = `${context ? '你们之前的通信：\n' + context + '\n\n' : ''}对方今天投入的碎片：\n${fragmentsText}\n\n请写一封信回应这些碎片。`;
+
+    // Build user message: multimodal if images exist
+    let userContent;
+    if (imageUrls.length > 0) {
+      userContent = [
+        { type: 'text', text: textPrompt },
+        ...imageUrls.map(url => ({
+          type: 'image_url',
+          image_url: { url, detail: 'low' }
+        }))
+      ];
+    } else {
+      userContent = textPrompt;
+    }
+
+    const result = await callWithFallback([
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userContent },
+    ], 600);
+
+    const content = result.content.trim();
+    const batchId = crypto.randomUUID();
+
+    // Save as a special letter
+    const { error: insertErr } = await supabase.from('pen_pal_letters').insert({
+      pen_pal_id: penPalId,
+      user_id: userId,
+      role: 'ai',
+      content,
+      summary: content.slice(0, 30) + '...',
+      letter_type: 'fragment_digest',
+      char_count: content.length,
+      delivered_at: new Date().toISOString(),
+      is_read: false,
+    });
+    if (insertErr) throw new Error('信件保存失败: ' + insertErr.message);
+
+    // Mark fragments as processed (only after letter confirmed saved)
+    const fragIds = fragments.map(f => f.id);
+    const now = new Date().toISOString();
+    for (const frag of fragments) {
+      const roll = Math.random();
+      const reaction = null; // emoji reactions disabled
+      await supabase.from('mind_fragments')
+        .update({
+          batch_id: batchId,
+          ai_reaction: reaction,
+          ai_reaction_at: reaction ? now : null,
+        })
+        .eq('id', frag.id);
+    }
+
+    // Update pen pal
+    await supabase.from('pen_pals').update({
+      total_letters: (penPal.total_letters || 0) + 1,
+      last_letter_at: new Date().toISOString(),
+    }).eq('id', penPalId);
+
+    // Send notification
+    sendLetterNotification(userId, penPal.name, content).catch(() => {});
+
+    await supabase.from('pending_tasks').update({
+      status: 'completed', completed_at: new Date().toISOString()
+    }).eq('id', taskId);
+
+    console.log(`🌙 碎片回信完成: ${penPal.name}`);
+  } catch (err) {
+    console.error('碎片 digest 失败:', err.message);
+    const { data: task } = await supabase.from('pending_tasks').select('retry_count').eq('id', taskId).single();
+    if (task && task.retry_count < 3) {
+      await supabase.from('pending_tasks').update({
+        status: 'pending', retry_count: task.retry_count + 1,
+        execute_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(), error: err.message,
+      }).eq('id', taskId);
+    } else {
+      await supabase.from('pending_tasks').update({
+        status: 'failed', error: err.message, completed_at: new Date().toISOString()
+      }).eq('id', taskId);
+    }
+  }
+}
+
+// AI 摘要生成（异步，不阻塞）
+async function generateSummary(content) {
+  try {
+    const result = await callWithFallback([
+      { role: 'system', content: '用一句话（20字以内）概括这封信的核心内容。只输出摘要，不加引号。' },
+      { role: 'user', content },
+    ], 50, 'claude-haiku-4-5-20251001');
+    return result.content.trim();
+  } catch {
+    return null;
+  }
+}
+
+// 邮件通知
+async function sendLetterNotification(userId, penPalName, letterContent) {
+  // Check user notification preference
+  const { data: user } = await supabase
+    .from('users').select('email, email_notify, nickname').eq('id', userId).single();
+  if (!user || !user.email_notify) return;
+
+  const preview = letterContent.slice(0, 50) + (letterContent.length > 50 ? '...' : '');
+  const subject = `你收到了一封来自「${penPalName}」的信 ✉`;
+  const html = `<div style="font-family:'Noto Serif SC',serif;max-width:480px;margin:0 auto;padding:40px 20px;background:#fafbfc;">
+    <h2 style="text-align:center;font-weight:400;letter-spacing:3px;color:#3c465a;margin-bottom:8px;">泡沫来信</h2>
+    <p style="text-align:center;color:#999;font-size:12px;margin-bottom:32px;">Fizz Letter</p>
+    <div style="background:#fff;border-radius:12px;padding:24px;border:1px solid #eee;">
+      <p style="color:#3c465a;font-size:15px;margin-bottom:16px;">「${penPalName}」给你写了一封信：</p>
+      <p style="color:#666;font-size:14px;line-height:1.8;font-style:italic;padding:16px;background:#f8f9fa;border-radius:8px;">${preview}</p>
+    </div>
+    <div style="text-align:center;margin-top:24px;">
+      <a href="${SITE_URL}" style="background:#8ca0c8;color:#fff;padding:12px 36px;border-radius:24px;text-decoration:none;font-size:14px;letter-spacing:2px;">打开泡沫邮箱</a>
+    </div>
+    <p style="color:#ccc;font-size:11px;text-align:center;margin-top:32px;">泡沫来信 · 见信如晤</p>
+  </div>`;
+
+  const emailBody = JSON.stringify({
+    from: 'Fizz Letter <noreply@fizzletter.cc>',
+    to: [user.email],
+    subject,
+    html,
+  });
+
+  return new Promise((resolve, reject) => {
+    const req = https.request('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + RESEND_API_KEY, 'Content-Type': 'application/json' },
+    }, (res) => {
+      let d = '';
+      res.on('data', c => d += c);
+      res.on('end', () => {
+        if (res.statusCode >= 400) {
+          console.error('邮件发送失败:', d);
+          reject(new Error(d));
+        } else {
+          console.log(`📧 通知已发送: ${user.email}`);
+          resolve();
+        }
+      });
+    });
+    req.on('error', reject);
+    req.write(emailBody);
+    req.end();
+  });
+}
+
+// === Scheduler ===
+
+async function processScheduledTasks() {
+  try {
+    const { data: tasks } = await supabase
+      .from('pending_tasks')
+      .select('*')
+      .eq('status', 'pending')
+      .lte('execute_at', new Date().toISOString())
+      .order('execute_at', { ascending: true })
+      .limit(5);
+
+    if (!tasks || tasks.length === 0) return;
+
+    // Mark all as processing
+    const taskIds = tasks.map(t => t.id);
+    await supabase.from('pending_tasks')
+      .update({ status: 'processing' })
+      .in('id', taskIds);
+
+    // Execute concurrently (max 3)
+    const executing = tasks.map(task => {
+      if (task.type === 'pen_pal_reply') {
+        return executePenPalReply(task.id, task.target_id, task.user_id);
+      } else if (task.type === 'mind_back_digest') {
+        return executeMindBackDigest(task.id, task.target_id, task.user_id);
+      }
+    });
+
+    await Promise.allSettled(executing);
+  } catch (err) {
+    console.error('Scheduler error:', err.message);
+  }
+}
+
+async function resetStuckTasks() {
+  const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+  const { data } = await supabase
+    .from('pending_tasks')
+    .update({ status: 'pending' })
+    .eq('status', 'processing')
+    .lt('created_at', fiveMinAgo)
+    .select('id');
+  if (data && data.length > 0) {
+    console.log(`重置 ${data.length} 个卡死任务`);
+  }
+}
+
+// AI 主动寄信
+async function checkInactivePenPals() {
+  try {
+    const { data: penPals } = await supabase
+      .from('pen_pals')
+      .select('id, user_id, name, total_letters, last_letter_at, consecutive_proactive')
+      .eq('is_active', true);
+
+    if (!penPals) return;
+
+    let processed = 0;
+    for (const pp of penPals) {
+      if (processed >= 5) break; // Max 5 per round
+      if (pp.consecutive_proactive >= 2) continue; // Already sent 2 proactive, stop
+
+      const stage = getRelationshipStage(pp.total_letters);
+      const thresholdDays = pp.total_letters <= 3 ? 2 : pp.total_letters <= 10 ? 4 : 7;
+      const lastActivity = new Date(pp.last_letter_at || pp.created_at || Date.now());
+      const daysSince = (Date.now() - lastActivity.getTime()) / (1000 * 60 * 60 * 24);
+
+      if (daysSince < thresholdDays) continue;
+
+      // Check no pending reply task
+      const { data: existing } = await supabase
+        .from('pending_tasks')
+        .select('id')
+        .eq('target_id', pp.id)
+        .in('status', ['pending', 'processing'])
+        .limit(1);
+      if (existing && existing.length > 0) continue;
+
+      // Schedule proactive letter
+      console.log(`📬 主动寄信: ${pp.name} (${daysSince.toFixed(1)} 天未活跃)`);
+
+      // Create the proactive letter directly
+      const { context } = await buildPenPalContext(pp.id, pp.name, getTimezone(pp.id));
+      const systemPrompt = `你是"${pp.name}"，通过书信与人交流。
+${stage.prompt}
+对方已经好几天没给你写信了。写一封自然的、不带压力的信。
+像老朋友随手写的：分享点小事、问候一下、或者说说你最近"想到的"。
+不要提"你怎么不回信"之类的话。100-200字。不要署名。全文中文。`;
+
+      try {
+        const result = await callWithFallback([
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: context ? `你们的通信记录：\n${context}\n\n写一封主动的信。` : '你们刚认识不久。写一封信。' },
+        ], 500);
+
+        const content = result.content.trim();
+        await supabase.from('pen_pal_letters').insert({
+          pen_pal_id: pp.id, user_id: pp.user_id, role: 'ai',
+          content, summary: content.slice(0, 30) + '...',
+          letter_type: 'proactive', char_count: content.length,
+          delivered_at: new Date().toISOString(), is_read: false,
+        });
+
+        await supabase.from('pen_pals').update({
+          consecutive_proactive: (pp.consecutive_proactive || 0) + 1,
+          last_letter_at: new Date().toISOString(),
+          total_letters: (pp.total_letters || 0) + 1,
+        }).eq('id', pp.id);
+
+        sendLetterNotification(pp.user_id, pp.name, content).catch(() => {});
+        processed++;
+      } catch (err) {
+        console.error(`主动寄信失败 ${pp.name}:`, err.message);
+      }
+    }
+  } catch (err) {
+    console.error('主动寄信检查失败:', err.message);
+  }
 }
 
 const server = http.createServer(async (req, res) => {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  
+
   if (req.method === 'OPTIONS') {
     res.writeHead(200);
     res.end();
@@ -535,6 +1389,18 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // 删除信箱条目
+  const mailboxDeleteMatch = req.url.match(/^\/api\/mailbox\/([a-f0-9-]+)$/);
+  if (req.method === 'DELETE' && mailboxDeleteMatch) {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: '未登录' });
+    const letterId = mailboxDeleteMatch[1];
+    const { error } = await supabase.from('letters').delete().eq('id', letterId).eq('user_id', decoded.id);
+    if (error) return sendJSON(res, 500, { error: '删除失败' });
+    sendJSON(res, 200, { ok: true });
+    return;
+  }
+
   // === 兑换码 ===
 
   // 用户兑换
@@ -655,16 +1521,787 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // === 信友系统 API ===
+
+  // URL pattern matching for pen pal routes with :id
+  const penpalMatch = req.url.match(/^\/api\/penpal\/([0-9a-f-]+)\/(letters|send|letter|status|restore|fragment|fragments|archive)$/);
+  const letterDeleteMatch = req.url.match(/^\/api\/penpal\/([0-9a-f-]+)\/letter\/([0-9a-f-]+)$/);
+  const fragmentDeleteMatch = req.url.match(/^\/api\/penpal\/([0-9a-f-]+)\/fragment\/([0-9a-f-]+)$/);
+  if (req.url.includes('/fragment/') && req.method === 'DELETE') {
+    console.log('DEBUG DELETE fragment URL:', req.url);
+    console.log('DEBUG fragmentDeleteMatch:', fragmentDeleteMatch);
+    console.log('DEBUG penpalMatch:', penpalMatch);
+  }
+  const penpalIdMatch = req.url.match(/^\/api\/penpal\/([0-9a-f-]+)$/);
+
+  // POST /api/penpal/create
+  if (req.method === 'POST' && req.url === '/api/penpal/create') {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: '未登录' });
+    try {
+      const { name, initial_letter } = await parseBody(req);
+      if (!name || !name.trim()) return sendJSON(res, 400, { error: '请给信友取个名字' });
+
+      // Free user: max 3 pen pals
+      const { data: user } = await supabase.from('users').select('is_premium').eq('id', decoded.id).single();
+      if (!user?.is_premium) {
+        const { count: penPalCount } = await supabase.from('pen_pals')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', decoded.id)
+          .eq('is_active', true);
+        if (penPalCount >= 3) return sendJSON(res, 403, { error: '免费用户最多 3 位信友，升级解锁更多' });
+      }
+
+      // Create pen pal record
+      const { data: penPal, error } = await supabase
+        .from('pen_pals')
+        .insert({
+          user_id: decoded.id,
+          name: name.trim(),
+          is_active: true,
+          total_letters: initial_letter ? 1 : 0,
+          consecutive_proactive: 0,
+          last_letter_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+      if (error) return sendJSON(res, 500, { error: '创建失败: ' + error.message });
+
+      if (initial_letter) {
+        // Save as the opening letter (from "拆一封信", not pen pal persona)
+        const taggedContent = '[INITIAL]' + initial_letter;
+        const { error: letterErr } = await supabase.from('pen_pal_letters').insert({
+          pen_pal_id: penPal.id,
+          user_id: decoded.id,
+          role: 'ai',
+          content: taggedContent,
+          summary: initial_letter.slice(0, 30) + (initial_letter.length > 30 ? '...' : ''),
+          letter_type: 'letter',
+          char_count: initial_letter.length,
+          delivered_at: new Date().toISOString(),
+          is_read: false,
+        });
+        if (letterErr) console.error('Initial letter insert failed:', letterErr);
+        else console.log('Initial letter inserted for pen pal', penPal.id);
+      } else {
+        // Create pending task for AI to write first letter (5 min delay)
+        await supabase.from('pending_tasks').insert({
+          type: 'pen_pal_reply',
+          target_id: penPal.id,
+          user_id: decoded.id,
+          status: 'pending',
+          retry_count: 0,
+          execute_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+        });
+      }
+
+      sendJSON(res, 201, { penPal });
+    } catch (err) {
+      console.error('Create pen pal error:', err.message);
+      sendJSON(res, 500, { error: '服务器错误' });
+    }
+    return;
+  }
+
+  // GET /api/penpal/list
+  if (req.method === 'GET' && req.url === '/api/penpal/list') {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: '未登录' });
+    try {
+      const { data: penPals, error } = await supabase
+        .from('pen_pals')
+        .select('id, name, total_letters, last_letter_at, created_at')
+        .eq('user_id', decoded.id)
+        .eq('is_active', true)
+        .order('last_letter_at', { ascending: false });
+      if (error) return sendJSON(res, 500, { error: '获取失败' });
+
+      // Get unread counts and latest letter preview for each pen pal
+      const enriched = await Promise.all((penPals || []).map(async pp => {
+        const { count: unread } = await supabase
+          .from('pen_pal_letters')
+          .select('id', { count: 'exact', head: true })
+          .eq('pen_pal_id', pp.id)
+          .eq('is_read', false)
+          .eq('role', 'ai');
+
+        const { data: latest } = await supabase
+          .from('pen_pal_letters')
+          .select('content, role, created_at')
+          .eq('pen_pal_id', pp.id)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        return {
+          ...pp,
+          unread_count: unread || 0,
+          latest_preview: latest && latest[0] ? {
+            content: latest[0].content.replace(/^\[INITIAL\]/, '').slice(0, 50) + (latest[0].content.replace(/^\[INITIAL\]/, '').length > 50 ? '...' : ''),
+            role: latest[0].role,
+            created_at: latest[0].created_at,
+          } : null,
+        };
+      }));
+
+      sendJSON(res, 200, { penPals: enriched });
+    } catch (err) {
+      console.error('List pen pals error:', err.message);
+      sendJSON(res, 500, { error: '服务器错误' });
+    }
+    return;
+  }
+
+  // GET /api/penpal/archived
+  if (req.method === 'GET' && req.url === '/api/penpal/archived') {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: '未登录' });
+    try {
+      const { data, error } = await supabase
+        .from('pen_pals')
+        .select('id, name, total_letters, last_letter_at, archived_at, created_at')
+        .eq('user_id', decoded.id)
+        .eq('is_active', false)
+        .order('archived_at', { ascending: false });
+      if (error) return sendJSON(res, 500, { error: '获取失败' });
+      sendJSON(res, 200, { penPals: data || [] });
+    } catch (err) {
+      console.error('Archived pen pals error:', err.message);
+      sendJSON(res, 500, { error: '服务器错误' });
+    }
+    return;
+  }
+
+  // GET /api/user/settings
+  if (req.method === 'GET' && req.url === '/api/user/settings') {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: '未登录' });
+    try {
+      const { data: user, error } = await supabase
+        .from('users')
+        .select('email_notify')
+        .eq('id', decoded.id)
+        .single();
+      if (error) return sendJSON(res, 500, { error: '获取失败' });
+      sendJSON(res, 200, { email_notify: user.email_notify || false });
+    } catch (err) {
+      console.error('Get settings error:', err.message);
+      sendJSON(res, 500, { error: '服务器错误' });
+    }
+    return;
+  }
+
+  // POST /api/user/settings
+  if (req.method === 'POST' && req.url === '/api/user/settings') {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: '未登录' });
+    try {
+      const { email_notify } = await parseBody(req);
+      const { error } = await supabase
+        .from('users')
+        .update({ email_notify: !!email_notify })
+        .eq('id', decoded.id);
+      if (error) return sendJSON(res, 500, { error: '更新失败' });
+      sendJSON(res, 200, { message: '设置已更新', email_notify: !!email_notify });
+    } catch (err) {
+      console.error('Update settings error:', err.message);
+      sendJSON(res, 500, { error: '服务器错误' });
+    }
+    return;
+  }
+
+  // DELETE /api/penpal/:id/letter/:letterId
+  if (req.method === "DELETE" && letterDeleteMatch) {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    try {
+      const letterId = letterDeleteMatch[2];
+      const penPalId = letterDeleteMatch[1];
+      // Verify ownership
+      const { data: pp } = await supabase.from("pen_pals").select("id").eq("id", penPalId).eq("user_id", decoded.id).single();
+      if (!pp) return sendJSON(res, 404, { error: "笔友不存在" });
+      const { error } = await supabase.from("pen_pal_letters").delete().eq("id", letterId).eq("pen_pal_id", penPalId);
+      if (error) return sendJSON(res, 500, { error: "删除失败" });
+      return sendJSON(res, 200, { ok: true });
+    } catch (err) {
+      console.error("Delete letter error:", err.message);
+      return sendJSON(res, 500, { error: "服务器错误" });
+    }
+  }
+
+  // DELETE /api/penpal/:id/fragment/:fragmentId (standalone, outside penpalMatch)
+  if (req.method === "DELETE" && fragmentDeleteMatch) {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    try {
+      const fragId = fragmentDeleteMatch[2];
+      const { data: frag } = await supabase.from("mind_fragments")
+        .select("id")
+        .eq("id", fragId)
+        .eq("user_id", decoded.id)
+        .single();
+      if (!frag) return sendJSON(res, 404, { error: "碎片不存在" });
+      await supabase.from("mind_fragments").delete().eq("id", fragId);
+      return sendJSON(res, 200, { ok: true });
+    } catch (err) {
+      console.error("Delete fragment error:", err.message);
+      return sendJSON(res, 500, { error: "服务器错误" });
+    }
+  }
+
+  // PUT /api/penpal/:id/fragment/:fragmentId — edit (standalone)
+  if (req.method === "PUT" && fragmentDeleteMatch) {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    try {
+      const fragId = fragmentDeleteMatch[2];
+      const body = await parseBody(req);
+      const newContent = (body.content || "").trim();
+      if (!newContent) return sendJSON(res, 400, { error: "内容不能为空" });
+      const { data: frag } = await supabase.from("mind_fragments")
+        .select("id")
+        .eq("id", fragId)
+        .eq("user_id", decoded.id)
+        .single();
+      if (!frag) return sendJSON(res, 404, { error: "碎片不存在" });
+      await supabase.from("mind_fragments").update({ content: newContent }).eq("id", fragId);
+      return sendJSON(res, 200, { ok: true });
+    } catch (err) {
+      console.error("Edit fragment error:", err.message);
+      return sendJSON(res, 500, { error: "编辑失败" });
+    }
+  }
+
+  // Pen pal routes with :id parameter
+  if (penpalMatch) {
+    const penPalId = penpalMatch[1];
+    const action = penpalMatch[2];
+
+    // GET /api/penpal/:id/letters
+    if (req.method === 'GET' && action === 'letters') {
+      const decoded = verifyToken(req);
+      if (!decoded) return sendJSON(res, 401, { error: '未登录' });
+      try {
+        // Parse query params for pagination
+        const urlObj = new URL(req.url, `http://${req.headers.host}`);
+        const page = parseInt(urlObj.searchParams.get('page')) || 1;
+        const limit = Math.min(parseInt(urlObj.searchParams.get('limit')) || 50, 100);
+        const offset = (page - 1) * limit;
+
+        // Verify ownership
+        const { data: pp } = await supabase.from('pen_pals').select('id').eq('id', penPalId).eq('user_id', decoded.id).single();
+        if (!pp) return sendJSON(res, 404, { error: '信友不存在' });
+
+        const { data: letters, error } = await supabase
+          .from('pen_pal_letters')
+          .select('id, role, content, summary, letter_type, char_count, created_at, delivered_at, is_read')
+          .eq('pen_pal_id', penPalId)
+          .order('created_at', { ascending: true })
+          .range(offset, offset + limit - 1);
+        if (error) return sendJSON(res, 500, { error: '获取失败' });
+
+        // Mark unread AI letters as read
+        await supabase.from('pen_pal_letters')
+          .update({ is_read: true })
+          .eq('pen_pal_id', penPalId)
+          .eq('is_read', false)
+          .eq('role', 'ai');
+
+        sendJSON(res, 200, { letters: letters || [], page, limit });
+      } catch (err) {
+        console.error('Get letters error:', err.message);
+        sendJSON(res, 500, { error: '服务器错误' });
+      }
+      return;
+    }
+
+    // POST /api/penpal/:id/send (also accepts /letter)
+    if (req.method === 'POST' && (action === 'send' || action === 'letter')) {
+      const decoded = verifyToken(req);
+      if (!decoded) return sendJSON(res, 401, { error: '未登录' });
+      try {
+        const body = await parseBody(req);
+        const content = body.content;
+        const instant = body.instant === true;
+        if (!instant && (!content || !content.trim())) return sendJSON(res, 400, { error: '信的内容不能为空' });
+
+        // Free user: max 200 chars
+        if (content && content.trim()) {
+          const { data: sUser } = await supabase.from('users').select('is_premium').eq('id', decoded.id).single();
+          if (!sUser?.is_premium && content.trim().length > 500) {
+            return sendJSON(res, 403, { error: '免费用户每封信最多 500 字，升级解锁更多' });
+          }
+        }
+
+        // Verify ownership
+        const { data: pp } = await supabase.from('pen_pals').select('id, total_letters').eq('id', penPalId).eq('user_id', decoded.id).single();
+        if (!pp) return sendJSON(res, 404, { error: '信友不存在' });
+
+        // Save user's letter (skip if instant with no content)
+        const trimmedContent = (content || '').trim();
+        if (trimmedContent) {
+          await supabase.from('pen_pal_letters').insert({
+            pen_pal_id: penPalId,
+            user_id: decoded.id,
+            role: 'user',
+            content: trimmedContent,
+            summary: trimmedContent.slice(0, 30) + (trimmedContent.length > 30 ? '...' : ''),
+            letter_type: 'letter',
+            char_count: trimmedContent.length,
+            delivered_at: new Date().toISOString(),
+            is_read: true,
+          });
+
+          // Update pen pal stats
+          await supabase.from('pen_pals').update({
+            total_letters: (pp.total_letters || 0) + 1,
+            last_letter_at: new Date().toISOString(),
+            consecutive_proactive: 0, // Reset proactive counter
+          }).eq('id', penPalId);
+        }
+
+        // Cancel existing pending pen_pal_reply task for this pen pal
+        await supabase.from('pending_tasks')
+          .update({ status: 'failed', completed_at: new Date().toISOString(), error: 'cancelled' })
+          .eq('target_id', penPalId)
+          .eq('type', 'pen_pal_reply')
+          .in('status', ['pending', 'processing']);
+
+        // Create new pending task with random delay (or instant)
+        const delayMinutes = instant ? 0 : randomDelay();
+        const estimated_at = new Date(Date.now() + delayMinutes * 60 * 1000).toISOString();
+        await supabase.from('pending_tasks').insert({
+          type: 'pen_pal_reply',
+          target_id: penPalId,
+          user_id: decoded.id,
+          status: 'pending',
+          retry_count: 0,
+          execute_at: estimated_at,
+        });
+
+        sendJSON(res, 201, { message: '信已寄出', delay_minutes: delayMinutes, estimated_at });
+      } catch (err) {
+        console.error('Send letter error:', err.message);
+        sendJSON(res, 500, { error: '服务器错误' });
+      }
+      return;
+    }
+
+    // GET /api/penpal/:id/status
+    if (req.method === 'GET' && action === 'status') {
+      const decoded = verifyToken(req);
+      if (!decoded) return sendJSON(res, 401, { error: '未登录' });
+      try {
+        const { data: pp } = await supabase.from('pen_pals').select('id').eq('id', penPalId).eq('user_id', decoded.id).single();
+        if (!pp) return sendJSON(res, 404, { error: '信友不存在' });
+
+        // Step 1: Always check unread AI letters FIRST (covers reply + digest)
+        const { data: unread } = await supabase
+          .from('pen_pal_letters')
+          .select('id, role, content, letter_type, created_at')
+          .eq('pen_pal_id', penPalId)
+          .eq('role', 'ai')
+          .eq('is_read', false)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (unread && unread.length > 0) {
+          const newLetter = unread[0];
+          await supabase.from('pen_pal_letters').update({ is_read: true }).eq('id', newLetter.id);
+          console.log(`📬 回信已送达: ${penPalId} (${newLetter.letter_type})`);
+          return sendJSON(res, 200, { hasReply: true, newLetter, pending: false });
+        }
+
+        // Step 2: No unread letter — check pending tasks (any type)
+        const { data: task } = await supabase
+          .from('pending_tasks')
+          .select('execute_at')
+          .eq('target_id', penPalId)
+          .in('status', ['pending', 'processing'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        sendJSON(res, 200, { hasReply: false, pending: !!task, estimated_at: task ? task.execute_at : null });
+      } catch (err) {
+        console.error('Pen pal status error:', err.message);
+        sendJSON(res, 500, { error: '服务器错误' });
+      }
+      return;
+    }
+
+    // POST /api/penpal/:id/restore
+    if (req.method === 'POST' && action === 'restore') {
+      const decoded = verifyToken(req);
+      if (!decoded) return sendJSON(res, 401, { error: '未登录' });
+      try {
+        const { data: pp } = await supabase.from('pen_pals').select('id').eq('id', penPalId).eq('user_id', decoded.id).single();
+        if (!pp) return sendJSON(res, 404, { error: '信友不存在' });
+
+        const { error } = await supabase.from('pen_pals').update({
+          is_active: true,
+          archived_at: null,
+        }).eq('id', penPalId);
+        if (error) return sendJSON(res, 500, { error: '恢复失败' });
+        sendJSON(res, 200, { message: '信友已恢复' });
+      } catch (err) {
+        console.error('Restore pen pal error:', err.message);
+        sendJSON(res, 500, { error: '服务器错误' });
+      }
+      return;
+    }
+
+    // POST /api/penpal/:id/fragment
+    if (req.method === 'POST' && action === 'fragment') {
+      const decoded = verifyToken(req);
+      if (!decoded) return sendJSON(res, 401, { error: '未登录' });
+      try {
+        const body = await parseBody(req, 10485760); // 10MB for base64 images
+        const content = body.content || '';
+        const imageBase64 = body.image; // base64 data URI
+        const instant = body.instant === true;
+        if (!content.trim() && !imageBase64 && !instant) return sendJSON(res, 400, { error: '内容不能为空' });
+
+        // Verify ownership
+        const { data: pp } = await supabase.from('pen_pals').select('id').eq('id', penPalId).eq('user_id', decoded.id).single();
+        if (!pp) return sendJSON(res, 404, { error: '信友不存在' });
+
+        // Free user: max 10 unprocessed fragments, total 500 chars
+        if (!instant) {
+          const { data: fUser } = await supabase.from('users').select('is_premium').eq('id', decoded.id).single();
+          if (!fUser?.is_premium) {
+            const { data: existingFrags } = await supabase.from('mind_fragments')
+              .select('id, content')
+              .eq('pen_pal_id', penPalId)
+              .is('batch_id', null);
+            const fragCount = (existingFrags || []).length;
+            if (fragCount >= 10) return sendJSON(res, 403, { error: '最多投入 10 条碎片，等 TA 回信后再继续' });
+            const totalChars = (existingFrags || []).reduce((sum, f) => sum + (f.content || '').replace(/\[IMG:[^\]]+\]/g, '').length, 0);
+            if (content.trim() && totalChars + content.trim().length > 500) {
+              return sendJSON(res, 403, { error: '碎片总字数已达上限，等 TA 回信后再继续' });
+            }
+          }
+        }
+
+        // Save user timezone
+        if (body.timezone) saveTimezone(penPalId, body.timezone);
+
+        // Upload image to Supabase Storage if provided
+        let finalContent = content.trim();
+        if (imageBase64) {
+          try {
+            const match = imageBase64.match(/^data:(image\/\w+);base64,(.+)$/);
+            if (!match) throw new Error('Invalid image format');
+            const mimeType = match[1];
+            const ext = mimeType.split('/')[1] === 'jpeg' ? 'jpg' : mimeType.split('/')[1];
+            const imgBuffer = Buffer.from(match[2], 'base64');
+            if (imgBuffer.length > 5 * 1024 * 1024) throw new Error('Image too large (max 5MB)');
+            const imgName = `${penPalId}/${Date.now()}_${crypto.randomUUID().slice(0,8)}.${ext}`;
+            const { error: uploadErr } = await supabase.storage
+              .from('fragment-images')
+              .upload(imgName, imgBuffer, { contentType: mimeType, upsert: false });
+            if (uploadErr) throw uploadErr;
+            const { data: urlData } = supabase.storage
+              .from('fragment-images')
+              .getPublicUrl(imgName);
+            finalContent = finalContent ? finalContent + '\n[IMG:' + urlData.publicUrl + ']' : '[IMG:' + urlData.publicUrl + ']';
+          } catch (imgErr) {
+            console.error('Image upload error:', imgErr.message);
+            // Continue without image if upload fails
+          }
+        }
+
+        // Save fragment (skip if empty instant-only trigger)
+        if (finalContent) {
+          await supabase.from('mind_fragments').insert({
+            pen_pal_id: penPalId,
+            user_id: decoded.id,
+            content: finalContent,
+          });
+        }
+
+        // Check if we need to schedule a digest
+        const { count: unprocessedCount } = await supabase
+          .from('mind_fragments')
+          .select('id', { count: 'exact', head: true })
+          .eq('pen_pal_id', penPalId)
+          .is('batch_id', null);
+
+        if (instant && unprocessedCount === 0) {
+          return sendJSON(res, 400, { error: '没有可以读的碎片' });
+        }
+        if (instant || unprocessedCount >= 1) {
+          // Check no pending digest task (cancel existing if instant)
+          if (instant) {
+            await supabase.from('pending_tasks')
+              .update({ status: 'failed', completed_at: new Date().toISOString(), error: 'cancelled' })
+              .eq('target_id', penPalId)
+              .eq('type', 'mind_back_digest')
+              .eq('status', 'pending');
+          }
+
+          const { data: existingTask } = instant ? { data: [] } : await supabase
+            .from('pending_tasks')
+            .select('id')
+            .eq('target_id', penPalId)
+            .eq('type', 'mind_back_digest')
+            .in('status', ['pending', 'processing'])
+            .limit(1);
+
+          if (!existingTask || existingTask.length === 0) {
+            const delayHours = instant ? 0 : 2 + Math.random() * 2;
+            await supabase.from('pending_tasks').insert({
+              type: 'mind_back_digest',
+              target_id: penPalId,
+              user_id: decoded.id,
+              status: 'pending',
+              retry_count: 0,
+              execute_at: new Date(Date.now() + delayHours * 60 * 60 * 1000).toISOString(),
+            });
+          }
+        }
+
+        sendJSON(res, 201, { message: instant ? '碎片已投入，TA 正在读...' : '碎片已投入' });
+      } catch (err) {
+        console.error('Save fragment error:', err.message);
+        sendJSON(res, 500, { error: '服务器错误' });
+      }
+      return;
+    }
+
+    // GET /api/penpal/:id/fragments
+    if (req.method === 'GET' && action === 'fragments') {
+      const decoded = verifyToken(req);
+      if (!decoded) return sendJSON(res, 401, { error: '未登录' });
+      try {
+        // Verify ownership
+        const { data: pp } = await supabase.from('pen_pals').select('id').eq('id', penPalId).eq('user_id', decoded.id).single();
+        if (!pp) return sendJSON(res, 404, { error: '信友不存在' });
+
+        // Today's fragments
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const { data: fragments } = await supabase
+          .from('mind_fragments')
+          .select('id, content, created_at, batch_id, ai_reaction, ai_reaction_at')
+          .eq('pen_pal_id', penPalId)
+          .gte('created_at', todayStart.toISOString())
+          .order('created_at', { ascending: true });
+
+        // Recent digest letters
+        const { data: digests } = await supabase
+          .from('pen_pal_letters')
+          .select('id, content, created_at')
+          .eq('pen_pal_id', penPalId)
+          .eq('letter_type', 'fragment_digest')
+          .order('created_at', { ascending: false })
+          .limit(3);
+
+        const parsedFragments = (fragments || []).map(f => {
+          const imgMatch = f.content.match(/\[IMG:([^\]]+)\]/);
+          return {
+            ...f,
+            content: f.content.replace(/\n?\[IMG:[^\]]+\]/g, '').trim(),
+            image_url: imgMatch ? imgMatch[1] : null,
+            ai_reaction: f.ai_reaction || null,
+            ai_reaction_at: f.ai_reaction_at || null,
+          };
+        });
+        sendJSON(res, 200, { fragments: parsedFragments, digests: digests || [] });
+      } catch (err) {
+        console.error('Get fragments error:', err.message);
+        sendJSON(res, 500, { error: '服务器错误' });
+      }
+      return;
+    }
+
+    // PUT /api/penpal/:id/fragment/:fragmentId (edit fragment)
+    if (req.method === 'PUT' && fragmentDeleteMatch) {
+      const decoded = verifyToken(req);
+      if (!decoded) return sendJSON(res, 401, { error: '未登录' });
+      try {
+        const fragId = fragmentDeleteMatch[2];
+        const body = await parseBody(req);
+        const newContent = (body.content || '').trim();
+        if (!newContent) return sendJSON(res, 400, { error: '内容不能为空' });
+        const { data: frag } = await supabase.from('mind_fragments')
+          .select('id')
+          .eq('id', fragId)
+          .eq('user_id', decoded.id)
+          .single();
+        if (!frag) return sendJSON(res, 404, { error: '碎片不存在' });
+        await supabase.from('mind_fragments').update({ content: newContent }).eq('id', fragId);
+        sendJSON(res, 200, { ok: true });
+      } catch (err) {
+        console.error('Edit fragment error:', err.message);
+        sendJSON(res, 500, { error: '编辑失败' });
+      }
+      return;
+    }
+
+    // POST /api/penpal/:id/archive
+
+    // DELETE /api/penpal/:id/fragment/:fragmentId
+    if (req.method === 'DELETE' && fragmentDeleteMatch) {
+      const decoded = verifyToken(req);
+      if (!decoded) return sendJSON(res, 401, { error: '未登录' });
+      try {
+        const fragId = fragmentDeleteMatch[2];
+        // Only delete unprocessed fragments (batch_id is null) owned by user
+        const { data: frag } = await supabase.from('mind_fragments')
+          .select('id')
+          .eq('id', fragId)
+          .eq('user_id', decoded.id)
+          .single();
+        if (!frag) return sendJSON(res, 404, { error: '碎片不存在' });
+        await supabase.from('mind_fragments').delete().eq('id', fragId);
+        sendJSON(res, 200, { ok: true });
+      } catch (err) {
+        console.error('Delete fragment error:', err.message);
+        sendJSON(res, 500, { error: '服务器错误' });
+      }
+      return;
+    }
+    if (req.method === 'POST' && action === 'archive') {
+      const decoded = verifyToken(req);
+      if (!decoded) return sendJSON(res, 401, { error: '未登录' });
+      try {
+        const { data: pp } = await supabase.from('pen_pals').select('id').eq('id', penPalId).eq('user_id', decoded.id).single();
+        if (!pp) return sendJSON(res, 404, { error: '信友不存在' });
+        await supabase.from('pen_pals').update({ is_active: false, archived_at: new Date().toISOString() }).eq('id', penPalId);
+        await supabase.from('pending_tasks').update({ status: 'failed', completed_at: new Date().toISOString(), error: 'archived' }).eq('target_id', penPalId).in('status', ['pending', 'processing']);
+        sendJSON(res, 200, { message: '信友已归档' });
+      } catch (err) {
+        console.error('Archive pen pal error:', err.message);
+        sendJSON(res, 500, { error: '服务器错误' });
+      }
+      return;
+    }
+  }
+
+  // GET /api/penpal/:id — combined detail endpoint (pen pal info + letters + pending status)
+  if (req.method === 'GET' && penpalIdMatch) {
+    const penPalId = penpalIdMatch[1];
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: '未登录' });
+    try {
+      const { data: penPal } = await supabase.from('pen_pals').select('*').eq('id', penPalId).eq('user_id', decoded.id).single();
+      if (!penPal) return sendJSON(res, 404, { error: '信友不存在' });
+
+      const { data: letters } = await supabase
+        .from('pen_pal_letters')
+        .select('id, role, content, summary, letter_type, char_count, created_at, delivered_at, is_read')
+        .eq('pen_pal_id', penPalId)
+        .order('created_at', { ascending: true })
+        .limit(100);
+
+      // Mark unread as read
+      await supabase.from('pen_pal_letters').update({ is_read: true }).eq('pen_pal_id', penPalId).eq('is_read', false).eq('role', 'ai');
+
+      // Check pending reply
+      const { data: task } = await supabase
+        .from('pending_tasks')
+        .select('execute_at')
+        .eq('target_id', penPalId)
+        .eq('type', 'pen_pal_reply')
+        .in('status', ['pending', 'processing'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      sendJSON(res, 200, {
+        penPal,
+        letters: letters || [],
+        pendingReply: task ? { estimated_at: task.execute_at } : null,
+      });
+    } catch (err) {
+      console.error('Pen pal detail error:', err.message);
+      sendJSON(res, 500, { error: '服务器错误' });
+    }
+    return;
+  }
+
+  // DELETE /api/penpal/:id
+  if (req.method === 'DELETE' && penpalIdMatch) {
+    const penPalId = penpalIdMatch[1];
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: '未登录' });
+    try {
+      const { data: pp } = await supabase.from('pen_pals').select('id').eq('id', penPalId).eq('user_id', decoded.id).single();
+      if (!pp) return sendJSON(res, 404, { error: '信友不存在' });
+
+      // Archive (soft delete)
+      await supabase.from('pen_pals').update({
+        is_active: false,
+        archived_at: new Date().toISOString(),
+      }).eq('id', penPalId);
+
+      // Cancel pending tasks
+      await supabase.from('pending_tasks')
+        .update({ status: 'failed', completed_at: new Date().toISOString(), error: 'cancelled' })
+        .eq('target_id', penPalId)
+        .in('status', ['pending', 'processing']);
+
+      sendJSON(res, 200, { message: '信友已归档' });
+    } catch (err) {
+      console.error('Archive pen pal error:', err.message);
+      sendJSON(res, 500, { error: '服务器错误' });
+    }
+    return;
+  }
+
+  // 真正删除信友（硬删除）
+  const penpalHardDelete = req.url.match(/^\/api\/penpal\/([0-9a-f-]+)\/delete$/);
+  if (req.method === 'POST' && penpalHardDelete) {
+    const penPalId = penpalHardDelete[1];
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: '未登录' });
+    try {
+      const { data: pp } = await supabase.from('pen_pals').select('id').eq('id', penPalId).eq('user_id', decoded.id).single();
+      if (!pp) return sendJSON(res, 404, { error: '信友不存在' });
+      // Cancel pending tasks
+      await supabase.from('pending_tasks')
+        .update({ status: 'failed', completed_at: new Date().toISOString(), error: 'deleted' })
+        .eq('target_id', penPalId)
+        .in('status', ['pending', 'processing']);
+      // Delete fragments, letters, then pen pal
+      await supabase.from('mind_fragments').delete().eq('pen_pal_id', penPalId);
+      await supabase.from('pen_pal_letters').delete().eq('pen_pal_id', penPalId);
+      await supabase.from('pen_pals').delete().eq('id', penPalId);
+      sendJSON(res, 200, { message: '信友已删除' });
+    } catch (err) {
+      console.error('Hard delete pen pal error:', err.message);
+      sendJSON(res, 500, { error: '删除失败' });
+    }
+    return;
+  }
+
   // 塔罗 API
   if (req.method === 'POST' && req.url === '/api/tarot') {
     try {
-      const { question, card, keywords } = await parseBody(req);
+      const { question, card, keywords, reversed } = await parseBody(req);
       recordHit('tarot');
-      const prompt = generateTarotPrompt(question, card, keywords);
+      const prompt = generateTarotPrompt(question, card, keywords, reversed);
       const result = await callTarotAPI(prompt);
       sendJSON(res, 200, { mood: result.content.trim(), model: result.model });
     } catch (err) {
       console.error('Tarot API Error:', err.message);
+      sendJSON(res, 500, { error: err.message });
+    }
+    return;
+  }
+
+  // 雷诺曼 API
+  if (req.method === "POST" && req.url === "/api/lenormand") {
+    try {
+      const { question, cards, mode } = await parseBody(req);
+      recordHit("lenormand");
+      const prompt = generateLenormandPrompt(question, cards);
+      const useWhisper = mode === "whisper" || !question;
+      const apiFn = useWhisper ? callLenormandWhisperAPI : callLenormandAPI;
+      const result = await apiFn(prompt);
+      sendJSON(res, 200, { reading: result.content.trim(), model: result.model });
+    } catch (err) {
+      console.error("Lenormand API Error:", err.message);
       sendJSON(res, 500, { error: err.message });
     }
     return;
@@ -721,13 +2358,71 @@ const server = http.createServer(async (req, res) => {
     recordHit('visit');
   }
 
+  // /api/clear-cache 返回清缓存页面（走 API 路径绕过旧 SW）
+  if (req.url.split("?")[0] === "/api/clear-cache") {
+    const clearPath = require("path").join(__dirname, "clear.html");
+    require("fs").readFile(clearPath, (err, data) => {
+      if (err) { res.writeHead(404); res.end("Not Found"); return; }
+      res.writeHead(200, {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+      });
+      res.end(data);
+    });
+    return;
+  }
+
+  // sw.js 永不缓存
+  if (req.url.split("?")[0] === "/sw.js") {
+    const swPath = require("path").join(__dirname, "sw.js");
+    require("fs").readFile(swPath, (err, data) => {
+      if (err) { res.writeHead(404); res.end("Not Found"); return; }
+      res.writeHead(200, {
+        "Content-Type": "application/javascript; charset=utf-8",
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+        "Pragma": "no-cache",
+      });
+      res.end(data);
+    });
+    return;
+  }
+
   // 静态文件
   serveStatic(req, res);
 });
+
+
+// === 碎片 Emoji 反应系统 ===
+
+const REACTION_RULES = [
+  { keywords: ['开心','哈哈','好笑','笑死','太好了','耶','棒','nice','哈','嘻','乐','搞笑','逗','段子','meme'], emoji: '😂' },
+  { keywords: ['喜欢','爱','想你','心动','甜','暖','幸福','好甜','感动','谢谢','thank','宝','亲','❤','在一起'], emoji: '❤️' },
+  { keywords: ['可爱','萌','好看','漂亮','美','帅','天使','小猫','小狗','奶茶','冰淇淋','吃','好吃','yummy'], emoji: '🥰' },
+  { keywords: ['难过','哭','伤心','委屈','心疼','不开心','累了','好累','疲惫','失眠','压力','焦虑','emo','想哭','抱抱','痛'], emoji: '🫂' },
+  { keywords: ['嗯','哦','啊','随便','无聊','看到','路过','发现','今天','刚才','突然','感觉','想到','不知道','好像'], emoji: '👀' },
+];
+const FALLBACK_EMOJIS = ['❤️', '👀', '🥰'];
+
+function pickReactionEmoji(content) {
+  const text = (content || '').toLowerCase();
+  for (const rule of REACTION_RULES) {
+    if (rule.keywords.some(k => text.includes(k))) return rule.emoji;
+  }
+  return FALLBACK_EMOJIS[Math.floor(Math.random() * FALLBACK_EMOJIS.length)];
+}
+
+
 
 server.listen(PORT, async () => {
   console.log(`泡沫来信服务器启动: http://localhost:${PORT}`);
   const { error } = await supabase.from('users').select('id').limit(1);
   if (error) console.error('Supabase 连接失败:', error.message);
   else console.log('Supabase 连接成功');
+
+  // Start scheduler
+  resetStuckTasks();
+  setInterval(processScheduledTasks, 30000);
+  setInterval(checkInactivePenPals, 6 * 60 * 60 * 1000); // Every 6 hours
+
+  console.log('Scheduler 启动 (30秒轮询 + 6小时主动寄信)');
 });

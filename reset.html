@@ -2,35 +2,18 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>重置密码 · 泡沫来信</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="images/favicon-16.png">
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/auth-theme.css">
   <style>
-    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-    .reset-box {
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      border-radius: 20px;
-      padding: 36px 28px;
-      width: 320px;
-      max-width: 90vw;
-      backdrop-filter: blur(var(--glass-blur));
-      -webkit-backdrop-filter: blur(var(--glass-blur));
-      animation: fadeInUp 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    .reset-title {
-      color: var(--text-primary);
-      font-family: 'LXGW WenKai', serif;
-      font-size: 1.2rem;
-      text-align: center;
-      margin-bottom: 24px;
-      letter-spacing: 0.15em;
-    }
-    .reset-done { text-align: center; }
-    .reset-done a {
-      color: var(--accent);
-      text-decoration: none;
-      font-size: 0.85rem;
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
     }
   </style>
 </head>
@@ -42,26 +25,31 @@
   </div>
   <div class="noise-overlay"></div>
 
-  <div class="reset-box">
+  <div class="auth-modal-content">
     <div id="reset-form">
-      <h3 class="reset-title">重置密码</h3>
+      <h3 class="auth-title">重置密码</h3>
       <input type="password" id="reset-password" class="auth-input" placeholder="新密码（至少6位）">
       <input type="password" id="reset-confirm" class="auth-input" placeholder="确认新密码">
-      <button id="btn-reset" class="btn-glow auth-submit" style="animation:none;">重置密码</button>
+      <button id="btn-reset" class="auth-submit" style="animation:none;">重置密码</button>
       <div id="reset-error" class="auth-error"></div>
     </div>
-    <div id="reset-success" style="display:none;" class="reset-done">
-      <h3 class="reset-title">密码已重置</h3>
-      <p style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:16px;">现在可以用新密码登录了</p>
-      <a href="/">返回泡沫来信</a>
+    <div id="reset-success" style="display:none;">
+      <h3 class="auth-title">密码已重置</h3>
+      <p class="auth-hint" style="margin-bottom:16px;">现在可以用新密码登录了</p>
+      <div class="auth-switch"><a href="/" style="color:var(--accent);text-decoration:none;">返回泡沫来信</a></div>
     </div>
   </div>
 
   <script>
+    // 主题同步
+    const savedTheme = localStorage.getItem('fizz_theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+
     const token = new URLSearchParams(window.location.search).get('token');
     if (!token) {
       document.getElementById('reset-error').textContent = '链接无效';
       document.getElementById('btn-reset').disabled = true;
+      document.getElementById('btn-reset').style.opacity = '0.4';
     }
 
     document.getElementById('btn-reset').addEventListener('click', async () => {

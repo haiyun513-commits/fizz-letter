@@ -107,6 +107,17 @@ const Auth = {
     return data.letters;
   },
 
+  async deleteFromMailbox(id) {
+    const res = await fetch('/api/mailbox/' + id, {
+      method: 'DELETE',
+      headers: this.authHeaders(),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.error || '删除失败');
+    }
+  },
+
   async redeem(code) {
     const res = await fetch('/api/redeem', {
       method: 'POST',

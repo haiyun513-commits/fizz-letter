@@ -92,7 +92,9 @@ class TarotDeck {
   }
 
   drawCard() {
-    this.currentCard = TAROT_CARDS[Math.floor(Math.random() * TAROT_CARDS.length)];
+    const base = TAROT_CARDS[Math.floor(Math.random() * TAROT_CARDS.length)];
+    const reversed = Math.random() < 0.5;
+    this.currentCard = { ...base, reversed };
     return this.currentCard;
   }
 
@@ -105,6 +107,7 @@ class TarotDeck {
         question: question || '',
         card: card.name,
         keywords: card.keywords,
+        reversed: card.reversed,
       }),
     });
 

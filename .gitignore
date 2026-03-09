@@ -4,3 +4,6 @@ API_KEY
 node_modules/
 stats.json
 .claude/worktrees/
+*.bak
+*.bak2
+*.bak3
