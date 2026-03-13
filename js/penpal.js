@@ -56,7 +56,7 @@ const PenPal = {
                       l.type === 'answer' ? '答案' :
                       l.type === 'tarot' ? '塔罗' : '语言之间';
         const date = new Date(l.created_at).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
-        const preview = (l.content || '').slice(0, 40) + (l.content?.length > 40 ? '...' : '');
+        const preview = (l.content || '').slice(0, 40) + ((l.content && l.content.length) > 40 ? '...' : '');
         return `<div class="legacy-card" data-id="${l.id}">
           <div class="legacy-card-icon">${icon}</div>
           <div class="legacy-card-body">
@@ -152,6 +152,7 @@ const PenPal = {
         // Keep instant button in "传达中..." state until reply arrives
         this._instantWaiting = true;
         this._sendingLetter = false;
+        if (typeof fetchCredits === 'function') fetchCredits();
         return; // skip finally reset for instant
       }
     } catch (err) {
@@ -346,7 +347,7 @@ const PenPal = {
   // ─── Fragments ───
   async loadFragments(penPalId) {
     try {
-      const data = await this.api('/' + penPalId + '/fragments');
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone; const data = await this.api('/' + penPalId + '/fragments?tz=' + encodeURIComponent(tz));
       this.renderFragments(data.fragments || [], data.digests || []);
     } catch (err) {
       console.error('loadFragments error:', err);
@@ -391,6 +392,7 @@ const PenPal = {
         this._fragSendBtn = sendBtn;
         this._fragPollPenPalId = penPalId;
         this.startFragmentPolling(penPalId);
+        if (typeof fetchCredits === 'function') fetchCredits();
       } else {
         sendBtn.textContent = '已投入 ✓';
         setTimeout(() => {
@@ -580,16 +582,38 @@ const PenPal = {
       input.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        if (file.size > 5 * 1024 * 1024) {
-          FizzUI.toast('图片不能超过 5MB', 'error');
+        if (file.size > 20 * 1024 * 1024) {
+          FizzUI.toast('图片太大了，请选择 20MB 以内的图片', 'error');
           input.value = '';
           return;
         }
         const reader = new FileReader();
         reader.onload = (ev) => {
-          this.fragmentImage = ev.target.result;
-          document.getElementById('fragment-preview-img').src = ev.target.result;
-          document.getElementById('fragment-image-preview').style.display = 'block';
+          const img = new Image();
+          img.onload = () => {
+            const MAX_W = 1200, MAX_H = 1200, QUALITY = 0.8;
+            let w = img.width, h = img.height;
+            if (w > MAX_W || h > MAX_H) {
+              const ratio = Math.min(MAX_W / w, MAX_H / h);
+              w = Math.round(w * ratio);
+              h = Math.round(h * ratio);
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            const compressed = canvas.toDataURL('image/jpeg', QUALITY);
+            const sizeKB = Math.round(compressed.length * 0.75 / 1024);
+            if (sizeKB > 3500) {
+              FizzUI.toast('图片压缩后仍超过限制，请换一张', 'error');
+              input.value = '';
+              return;
+            }
+            this.fragmentImage = compressed;
+            document.getElementById('fragment-preview-img').src = compressed;
+            document.getElementById('fragment-image-preview').style.display = 'block';
+          };
+          img.src = ev.target.result;
         };
         reader.readAsDataURL(file);
       });

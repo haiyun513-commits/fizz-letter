@@ -375,6 +375,20 @@
   margin-top: 32px;
 }
 /* === 泡沫来信 认证弹窗美化 === */
+/* 心愿点数显示 */
+.auth-credits {
+  color: var(--text-ghost, #8a8a8a);
+  font-family: "Noto Serif SC", serif;
+  font-size: 0.7rem;
+  margin-right: 6px;
+  opacity: 0.7;
+}
+.instant-credits {
+  font-size: 0.65rem;
+  color: var(--text-ghost, #8a8a8a);
+  margin-left: 4px;
+  opacity: 0.6;
+}
 /* 此文件由阿文维护，师傅请勿修改 */
 
 /* --- 亮色主题 --- */

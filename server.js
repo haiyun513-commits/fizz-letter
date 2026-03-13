@@ -2,6 +2,7 @@ const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 const bcrypt = require('bcryptjs');
@@ -45,6 +46,28 @@ function recordHit(feature) {
   saveStats(stats);
 }
 
+
+
+
+// === 心愿点数系统 ===
+const INITIAL_CREDITS = 200;
+
+async function getUserCredits(userId) {
+  const { data } = await supabase.from("users").select("credits, is_premium").eq("id", userId).single();
+  return data;
+}
+
+async function deductCredit(userId) {
+  const { data, error } = await supabase.rpc("deduct_credit", { user_id_input: userId });
+  if (error) {
+    // Fallback: manual deduct
+    const { data: user } = await supabase.from("users").select("credits").eq("id", userId).single();
+    if (!user || user.credits <= 0) return false;
+    await supabase.from("users").update({ credits: user.credits - 1 }).eq("id", userId);
+    return true;
+  }
+  return true;
+}
 
 // === Timezone Store (file-based) ===
 const TZ_FILE = path.join(__dirname, 'timezones.json');
@@ -106,6 +129,8 @@ const MIME_TYPES = {
   '.json': 'application/json',
 };
 
+const GZIP_TYPES = new Set(['.html','.css','.js','.json','.svg']);
+
 function serveStatic(req, res) {
   let urlPath = req.url.split("?")[0];
   let filePath = urlPath === "/" ? "/index.html" : decodeURIComponent(urlPath);
@@ -120,8 +145,21 @@ function serveStatic(req, res) {
       res.end('Not Found');
       return;
     }
-    res.writeHead(200, { 'Content-Type': contentType + '; charset=utf-8', 'Cache-Control': 'no-store' });
-    res.end(data);
+    const acceptEncoding = req.headers['accept-encoding'] || '';
+    if (GZIP_TYPES.has(ext) && acceptEncoding.includes('gzip')) {
+      zlib.gzip(data, (e, compressed) => {
+        if (e) {
+          res.writeHead(200, { 'Content-Type': contentType + '; charset=utf-8' });
+          res.end(data);
+        } else {
+          res.writeHead(200, { 'Content-Type': contentType + '; charset=utf-8', 'Content-Encoding': 'gzip', 'Cache-Control': 'public, max-age=3600' });
+          res.end(compressed);
+        }
+      });
+    } else {
+      res.writeHead(200, { 'Content-Type': contentType + '; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
+      res.end(data);
+    }
   });
 }
 
@@ -479,7 +517,7 @@ function getUserTimeContext(timezone) {
   try {
     const now = new Date();
     const formatter = new Intl.DateTimeFormat('zh-CN', {
-      timeZone: timezone || 'UTC',
+      timeZone: timezone || 'Asia/Shanghai',
       year: 'numeric', month: 'long', day: 'numeric',
       weekday: 'long', hour: '2-digit', minute: '2-digit',
       hour12: false
@@ -487,7 +525,7 @@ function getUserTimeContext(timezone) {
     const timeStr = formatter.format(now);
 
     const hourFormatter = new Intl.DateTimeFormat('en', {
-      timeZone: timezone || 'UTC', hour: 'numeric', hour12: false
+      timeZone: timezone || 'Asia/Shanghai', hour: 'numeric', hour12: false
     });
     const hour = parseInt(hourFormatter.format(now));
 
@@ -525,7 +563,7 @@ function formatTimeInTz(isoStr, tz) {
   const d = new Date(isoStr);
   try {
     return d.toLocaleString('zh-CN', {
-      timeZone: tz || 'UTC',
+      timeZone: tz || 'Asia/Shanghai',
       month: 'numeric', day: 'numeric',
       hour: '2-digit', minute: '2-digit', hour12: false
     });
@@ -1040,8 +1078,23 @@ async function generateSummary(content) {
   }
 }
 
+// 邮件通知限流：每人每天最多5封
+const emailDailyCount = {};
+function getEmailCountKey(uid) {
+  const d = new Date().toISOString().split("T")[0];
+  return uid + ":" + d;
+}
+
 // 邮件通知
 async function sendLetterNotification(userId, penPalName, letterContent) {
+  // 每人每天限5封邮件通知
+  const ek = getEmailCountKey(userId);
+  if (!emailDailyCount[ek]) emailDailyCount[ek] = 0;
+  if (emailDailyCount[ek] >= 5) {
+    console.log(`📧 跳过通知（${userId} 今日已达5封上限）`);
+    return;
+  }
+  emailDailyCount[ek]++;
   // Check user notification preference
   const { data: user } = await supabase
     .from('users').select('email, email_notify, nickname').eq('id', userId).single();
@@ -1106,10 +1159,10 @@ async function processScheduledTasks() {
 
     if (!tasks || tasks.length === 0) return;
 
-    // Mark all as processing
+    // Mark all as processing (update execute_at to now so resetStuckTasks can track actual processing start)
     const taskIds = tasks.map(t => t.id);
     await supabase.from('pending_tasks')
-      .update({ status: 'processing' })
+      .update({ status: 'processing', execute_at: new Date().toISOString() })
       .in('id', taskIds);
 
     // Execute concurrently (max 3)
@@ -1133,7 +1186,7 @@ async function resetStuckTasks() {
     .from('pending_tasks')
     .update({ status: 'pending' })
     .eq('status', 'processing')
-    .lt('created_at', fiveMinAgo)
+    .lt('execute_at', fiveMinAgo)
     .select('id');
   if (data && data.length > 0) {
     console.log(`重置 ${data.length} 个卡死任务`);
@@ -1234,6 +1287,14 @@ const server = http.createServer(async (req, res) => {
   }
 
   // === 账号系统 ===
+  // === 心愿点数查询 ===
+  if (req.method === "GET" && req.url === "/api/credits") {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    const { data } = await supabase.from("users").select("credits, is_premium").eq("id", decoded.id).single();
+    return sendJSON(res, 200, { credits: data?.credits ?? 0, is_premium: data?.is_premium ?? false });
+  }
+
 
   // 注册
   if (req.method === 'POST' && req.url === '/api/register') {
@@ -1352,21 +1413,25 @@ const server = http.createServer(async (req, res) => {
     try {
       const { type, content, metadata } = await parseBody(req);
       if (!type || !content) return sendJSON(res, 400, { error: '缺少必要字段' });
-      // 免费用户信箱上限
-      const { data: user } = await supabase.from('users').select('is_premium').eq('id', decoded.id).single();
-      if (!user?.is_premium) {
-        const { count } = await supabase.from('letters').select('id', { count: 'exact', head: true }).eq('user_id', decoded.id);
-        if (count >= 20) {
-          const { data: oldest } = await supabase.from('letters').select('id').eq('user_id', decoded.id).order('created_at', { ascending: true }).limit(1);
-          if (oldest && oldest[0]) await supabase.from('letters').delete().eq('id', oldest[0].id);
-        }
-      }
+      // 先插入
       const { data, error } = await supabase
         .from('letters')
         .insert({ user_id: decoded.id, type, content, metadata: metadata || {} })
         .select()
         .single();
       if (error) return sendJSON(res, 500, { error: '保存失败' });
+      // 免费用户信箱上限：插入后清理超出的（避免并发竞态）
+      const { data: user } = await supabase.from('users').select('is_premium').eq('id', decoded.id).single();
+      if (!user?.is_premium) {
+        const { count } = await supabase.from('letters').select('id', { count: 'exact', head: true }).eq('user_id', decoded.id);
+        if (count > 20) {
+          const excess = count - 20;
+          const { data: oldest } = await supabase.from('letters').select('id').eq('user_id', decoded.id).order('created_at', { ascending: true }).limit(excess);
+          if (oldest && oldest.length > 0) {
+            await supabase.from('letters').delete().in('id', oldest.map(o => o.id));
+          }
+        }
+      }
       sendJSON(res, 201, { letter: data });
     } catch (err) {
       console.error('Mailbox save error:', err.message);
@@ -1824,6 +1889,14 @@ const server = http.createServer(async (req, res) => {
         const instant = body.instant === true;
         if (!instant && (!content || !content.trim())) return sendJSON(res, 400, { error: '信的内容不能为空' });
 
+        // Credits check for instant
+        if (instant) {
+          const cUser = await getUserCredits(decoded.id);
+          if (!cUser?.is_premium && (!cUser || cUser.credits <= 0)) {
+            return sendJSON(res, 403, { error: '心愿点数不足，无法使用一念即达' });
+          }
+        }
+
         // Free user: max 200 chars
         if (content && content.trim()) {
           const { data: sUser } = await supabase.from('users').select('is_premium').eq('id', decoded.id).single();
@@ -1868,6 +1941,13 @@ const server = http.createServer(async (req, res) => {
 
         // Create new pending task with random delay (or instant)
         const delayMinutes = instant ? 0 : randomDelay();
+        // Deduct credit for instant
+        if (instant) {
+          const cUser2 = await getUserCredits(decoded.id);
+          if (!cUser2?.is_premium) {
+            await deductCredit(decoded.id);
+          }
+        }
         const estimated_at = new Date(Date.now() + delayMinutes * 60 * 1000).toISOString();
         await supabase.from('pending_tasks').insert({
           type: 'pen_pal_reply',
@@ -1964,6 +2044,14 @@ const server = http.createServer(async (req, res) => {
         // Verify ownership
         const { data: pp } = await supabase.from('pen_pals').select('id').eq('id', penPalId).eq('user_id', decoded.id).single();
         if (!pp) return sendJSON(res, 404, { error: '信友不存在' });
+
+        // Credits check for instant (between)
+        if (instant) {
+          const cUserB = await getUserCredits(decoded.id);
+          if (!cUserB?.is_premium && (!cUserB || cUserB.credits <= 0)) {
+            return sendJSON(res, 403, { error: '心愿点数不足，无法使用一念即达' });
+          }
+        }
 
         // Free user: max 10 unprocessed fragments, total 500 chars
         if (!instant) {
@@ -2077,14 +2165,21 @@ const server = http.createServer(async (req, res) => {
         const { data: pp } = await supabase.from('pen_pals').select('id').eq('id', penPalId).eq('user_id', decoded.id).single();
         if (!pp) return sendJSON(res, 404, { error: '信友不存在' });
 
-        // Today's fragments
-        const todayStart = new Date();
-        todayStart.setHours(0, 0, 0, 0);
+        // Recent 7 days fragments (user timezone)
+        const tz = (new URL('http://x?' + (req.url.split('?')[1] || '')).searchParams.get('tz')) || 'America/New_York';
+        const now = new Date();
+        const userNow = new Date(now.toLocaleString('en-US', { timeZone: tz }));
+        const sevenDaysAgo = new Date(userNow);
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        sevenDaysAgo.setHours(0, 0, 0, 0);
+        // Convert back to UTC for query
+        const offset = userNow - now;
+        const queryStart = new Date(sevenDaysAgo.getTime() - offset);
         const { data: fragments } = await supabase
           .from('mind_fragments')
           .select('id, content, created_at, batch_id, ai_reaction, ai_reaction_at')
           .eq('pen_pal_id', penPalId)
-          .gte('created_at', todayStart.toISOString())
+          .gte('created_at', queryStart.toISOString())
           .order('created_at', { ascending: true });
 
         // Recent digest letters
@@ -2332,6 +2427,454 @@ const server = http.createServer(async (req, res) => {
       sendJSON(res, 200, { word, response: result.content.trim(), model: result.model });
     } catch (err) {
       console.error('Answer API Error:', err.message);
+      sendJSON(res, 500, { error: err.message });
+    }
+    return;
+  }
+
+
+  // === 字卡多对话 ===
+  const WC_CHATS_DIR = path.join(__dirname, "data", "wc-chats");
+
+  function readUserChats(userId) {
+    const fp = path.join(WC_CHATS_DIR, userId + ".json");
+    try { return JSON.parse(fs.readFileSync(fp, "utf8")); }
+    catch { return { chats: [], currentId: null }; }
+  }
+
+  function writeUserChats(userId, data) {
+    fs.mkdirSync(WC_CHATS_DIR, { recursive: true });
+    fs.writeFileSync(path.join(WC_CHATS_DIR, userId + ".json"), JSON.stringify(data));
+  }
+
+  // GET /api/wc-chats — 对话列表
+  if (req.method === "GET" && req.url === "/api/wc-chats") {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    const data = readUserChats(decoded.id);
+    const list = data.chats.map(c => ({
+      id: c.id, title: c.title, messageCount: (c.messages || []).length, updatedAt: c.updatedAt
+    }));
+    return sendJSON(res, 200, { chats: list, currentId: data.currentId });
+  }
+
+  // POST /api/wc-chats — 新建对话
+  if (req.method === "POST" && req.url === "/api/wc-chats") {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    const data = readUserChats(decoded.id);
+    const chat = { id: crypto.randomUUID(), title: "新对话", messages: [], usedTexts: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    data.chats.unshift(chat);
+    data.currentId = chat.id;
+    if (data.chats.length > 20) data.chats = data.chats.slice(0, 20);
+    writeUserChats(decoded.id, data);
+    return sendJSON(res, 200, { id: chat.id });
+  }
+
+  // POST /api/wc-chats/save — 保存当前对话消息
+  if (req.method === "POST" && req.url === "/api/wc-chats/save") {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    try {
+      const body = await parseBody(req);
+      const data = readUserChats(decoded.id);
+      const chat = data.chats.find(c => c.id === body.id);
+      if (!chat) return sendJSON(res, 404, { error: "对话不存在" });
+      chat.messages = (body.messages || []).slice(-100);
+      chat.usedTexts = body.usedTexts || [];
+      if (chat.messages.length > 0 && chat.title === "新对话") {
+        chat.title = chat.messages[0].text.slice(0, 12);
+      }
+      chat.updatedAt = new Date().toISOString();
+      writeUserChats(decoded.id, data);
+      return sendJSON(res, 200, { ok: true, title: chat.title });
+    } catch (e) { return sendJSON(res, 500, { error: e.message }); }
+  }
+
+  // GET /api/wc-chats/:id — 加载对话
+  if (req.method === "GET" && req.url.match(/^\/api\/wc-chats\/[a-f0-9-]+$/)) {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    const chatId = req.url.split("/api/wc-chats/")[1];
+    const data = readUserChats(decoded.id);
+    const chat = data.chats.find(c => c.id === chatId);
+    if (!chat) return sendJSON(res, 404, { error: "对话不存在" });
+    data.currentId = chatId;
+    writeUserChats(decoded.id, data);
+    return sendJSON(res, 200, { messages: chat.messages, usedTexts: chat.usedTexts || [] });
+  }
+
+  // DELETE /api/wc-chats/:id — 删除对话
+  if (req.method === "DELETE" && req.url.match(/^\/api\/wc-chats\/[a-f0-9-]+$/)) {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    const chatId = req.url.split("/api/wc-chats/")[1];
+    const data = readUserChats(decoded.id);
+    data.chats = data.chats.filter(c => c.id !== chatId);
+    if (data.currentId === chatId) data.currentId = data.chats[0]?.id || null;
+    writeUserChats(decoded.id, data);
+    return sendJSON(res, 200, { ok: true });
+  }
+
+    // === 自定义字卡 CRUD ===
+  const CUSTOM_CARDS_DIR = path.join(__dirname, "data", "custom-cards");
+
+  // Helper: read user custom cards file
+  function readUserCards(userId) {
+    const fp = path.join(CUSTOM_CARDS_DIR, userId + ".json");
+    try {
+      return JSON.parse(fs.readFileSync(fp, "utf8"));
+    } catch { return { cards: [], mode: "default" }; }
+  }
+
+  // Helper: write user custom cards file
+  function writeUserCards(userId, data) {
+    const fp = path.join(CUSTOM_CARDS_DIR, userId + ".json");
+    fs.mkdirSync(path.dirname(fp), { recursive: true });
+    fs.writeFileSync(fp, JSON.stringify(data, null, 2));
+  }
+
+  // GET /api/custom-cards — 获取用户自定义卡 + 模式
+  if (req.method === "GET" && req.url === "/api/custom-cards") {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    const data = readUserCards(decoded.id);
+    return sendJSON(res, 200, data);
+  }
+
+  // POST /api/custom-cards — 添加卡片（单条或批量）
+  if (req.method === "POST" && req.url === "/api/custom-cards") {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    try {
+      const body = await parseBody(req);
+      const data = readUserCards(decoded.id);
+      const now = new Date().toISOString();
+
+      if (body.texts && Array.isArray(body.texts)) {
+        // 批量添加
+        const newCards = body.texts
+          .map(t => (t || "").trim())
+          .filter(t => t.length > 0 && t.length <= 20)
+          .map(t => ({ id: crypto.randomUUID(), text: t, created_at: now }));
+        data.cards.push(...newCards);
+        writeUserCards(decoded.id, data);
+        return sendJSON(res, 200, { added: newCards.length, total: data.cards.length });
+      } else if (body.text) {
+        const text = body.text.trim();
+        if (!text || text.length > 20) return sendJSON(res, 400, { error: "卡片文字1-20字" });
+        const card = { id: crypto.randomUUID(), text, created_at: now };
+        data.cards.push(card);
+        writeUserCards(decoded.id, data);
+        return sendJSON(res, 200, { card, total: data.cards.length });
+      } else {
+        return sendJSON(res, 400, { error: "请提供 text 或 texts" });
+      }
+    } catch (err) {
+      return sendJSON(res, 500, { error: err.message });
+    }
+  }
+
+  // DELETE /api/custom-cards/:id — 删除单张卡
+  if (req.method === "DELETE" && req.url.startsWith("/api/custom-cards/")) {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    const cardId = req.url.split("/api/custom-cards/")[1];
+    if (!cardId) return sendJSON(res, 400, { error: "缺少卡片 ID" });
+    const data = readUserCards(decoded.id);
+    const before = data.cards.length;
+    data.cards = data.cards.filter(c => c.id !== cardId);
+    if (data.cards.length === before) return sendJSON(res, 404, { error: "卡片不存在" });
+    writeUserCards(decoded.id, data);
+    return sendJSON(res, 200, { deleted: true, total: data.cards.length });
+  }
+
+  // POST /api/card-mode — 切换卡组模式
+  if (req.method === "POST" && req.url === "/api/card-mode") {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    try {
+      const { mode } = await parseBody(req);
+      if (!["default", "custom", "mixed"].includes(mode)) {
+        return sendJSON(res, 400, { error: "模式必须是 default/custom/mixed" });
+      }
+      const data = readUserCards(decoded.id);
+      data.mode = mode;
+      writeUserCards(decoded.id, data);
+      return sendJSON(res, 200, { mode });
+    } catch (err) {
+      return sendJSON(res, 500, { error: err.message });
+    }
+  }
+
+  // === 表情包系统（分组） ===
+  const STICKERS_DIR = path.join(__dirname, "data", "wc-stickers");
+
+  function readUserStickers(userId) {
+    const fp = path.join(STICKERS_DIR, userId + ".json");
+    try { return JSON.parse(fs.readFileSync(fp, "utf8")); }
+    catch { return { groups: [{ id: crypto.randomUUID(), name: "默认", enabled: true, stickers: [] }] }; }
+  }
+
+  function writeUserStickers(userId, data) {
+    fs.mkdirSync(STICKERS_DIR, { recursive: true });
+    fs.writeFileSync(path.join(STICKERS_DIR, userId + ".json"), JSON.stringify(data));
+  }
+
+  // GET /api/stickers — 获取用户表情包（含分组）
+  if (req.method === "GET" && req.url === "/api/stickers") {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    const data = readUserStickers(decoded.id);
+    return sendJSON(res, 200, data);
+  }
+
+  // POST /api/stickers — 上传表情包到指定分组
+  if (req.method === "POST" && req.url === "/api/stickers") {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    try {
+      const body = await parseBody(req, 5242880); // 5MB max for batch
+      const { image, images, groupId } = body;
+      const data = readUserStickers(decoded.id);
+      let group = data.groups.find(g => g.id === groupId);
+      if (!group) group = data.groups[0];
+      if (!group) {
+        group = { id: crypto.randomUUID(), name: "默认", enabled: true, stickers: [] };
+        data.groups.push(group);
+      }
+      const imgDir = path.join(STICKERS_DIR, "images", decoded.id);
+      fs.mkdirSync(imgDir, { recursive: true });
+
+      const saveOne = (imgData) => {
+        if (!imgData || !imgData.startsWith("data:image/")) return null;
+        const matches = imgData.match(/^data:image\/([a-z]+);base64,(.+)$/i);
+        if (!matches) return null;
+        const ext = matches[1] === "jpeg" ? "jpg" : matches[1];
+        const imgBuf = Buffer.from(matches[2], "base64");
+        const id = crypto.randomUUID();
+        const filename = id + "." + ext;
+        fs.writeFileSync(path.join(imgDir, filename), imgBuf);
+        return { id, filename, createdAt: new Date().toISOString() };
+      };
+
+      // Count total stickers across all groups
+      const totalCount = data.groups.reduce((sum, g) => sum + g.stickers.length, 0);
+
+      if (images && Array.isArray(images)) {
+        // Batch upload
+        if (totalCount + images.length > 200) return sendJSON(res, 400, { error: "最多保存200个表情包" });
+        const added = [];
+        for (const img of images) {
+          const s = saveOne(img);
+          if (s) { group.stickers.push(s); added.push(s); }
+        }
+        writeUserStickers(decoded.id, data);
+        return sendJSON(res, 200, { added: added.length, group: group });
+      } else if (image) {
+        if (totalCount >= 200) return sendJSON(res, 400, { error: "最多保存200个表情包" });
+        const s = saveOne(image);
+        if (!s) return sendJSON(res, 400, { error: "图片格式无效" });
+        group.stickers.push(s);
+        writeUserStickers(decoded.id, data);
+        return sendJSON(res, 200, { sticker: s, group: group });
+      }
+      return sendJSON(res, 400, { error: "请提供 image 或 images" });
+    } catch (e) { return sendJSON(res, 500, { error: e.message }); }
+  }
+
+  // GET /api/stickers/image/:userId/:filename — 获取表情包图片
+  if (req.method === "GET" && req.url.match(/^\/api\/stickers\/image\/[^/]+\/[^/]+$/)) {
+    const parts = req.url.split("/");
+    const userId = parts[4];
+    const filename = parts[5];
+    const imgPath = path.join(STICKERS_DIR, "images", userId, filename);
+    try {
+      const imgData = fs.readFileSync(imgPath);
+      const ext = path.extname(filename).slice(1);
+      const mime = ext === "jpg" ? "image/jpeg" : ext === "png" ? "image/png" : ext === "gif" ? "image/gif" : ext === "webp" ? "image/webp" : "image/jpeg";
+      res.writeHead(200, { "Content-Type": mime, "Cache-Control": "public, max-age=31536000" });
+      return res.end(imgData);
+    } catch {
+      res.writeHead(404);
+      return res.end("Not Found");
+    }
+  }
+
+  // DELETE /api/stickers/:id — 删除单个表情包
+  if (req.method === "DELETE" && req.url.match(/^\/api\/stickers\/[a-f0-9-]+$/)) {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    const stickerId = req.url.split("/api/stickers/")[1];
+    const data = readUserStickers(decoded.id);
+    let found = false;
+    for (const group of data.groups) {
+      const idx = group.stickers.findIndex(s => s.id === stickerId);
+      if (idx >= 0) {
+        const sticker = group.stickers[idx];
+        try { fs.unlinkSync(path.join(STICKERS_DIR, "images", decoded.id, sticker.filename)); } catch {}
+        group.stickers.splice(idx, 1);
+        found = true;
+        break;
+      }
+    }
+    if (!found) return sendJSON(res, 404, { error: "表情不存在" });
+    writeUserStickers(decoded.id, data);
+    return sendJSON(res, 200, { ok: true });
+  }
+
+  // POST /api/sticker-groups — 创建分组
+  if (req.method === "POST" && req.url === "/api/sticker-groups") {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    try {
+      const { name } = await parseBody(req);
+      const data = readUserStickers(decoded.id);
+      if (data.groups.length >= 20) return sendJSON(res, 400, { error: "最多20个分组" });
+      const group = { id: crypto.randomUUID(), name: (name || "新分组").slice(0, 10), enabled: true, stickers: [] };
+      data.groups.push(group);
+      writeUserStickers(decoded.id, data);
+      return sendJSON(res, 200, { group });
+    } catch (e) { return sendJSON(res, 500, { error: e.message }); }
+  }
+
+  // PUT /api/sticker-groups/:id — 修改分组（名称/启用）
+  if (req.method === "PUT" && req.url.match(/^\/api\/sticker-groups\/[a-f0-9-]+$/)) {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    const groupId = req.url.split("/api/sticker-groups/")[1];
+    try {
+      const body = await parseBody(req);
+      const data = readUserStickers(decoded.id);
+      const group = data.groups.find(g => g.id === groupId);
+      if (!group) return sendJSON(res, 404, { error: "分组不存在" });
+      if (body.name !== undefined) group.name = body.name.slice(0, 10);
+      if (body.enabled !== undefined) group.enabled = !!body.enabled;
+      writeUserStickers(decoded.id, data);
+      return sendJSON(res, 200, { group });
+    } catch (e) { return sendJSON(res, 500, { error: e.message }); }
+  }
+
+  // DELETE /api/sticker-groups/:id — 删除分组（含所有表情）
+  if (req.method === "DELETE" && req.url.match(/^\/api\/sticker-groups\/[a-f0-9-]+$/)) {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    const groupId = req.url.split("/api/sticker-groups/")[1];
+    const data = readUserStickers(decoded.id);
+    const group = data.groups.find(g => g.id === groupId);
+    if (!group) return sendJSON(res, 404, { error: "分组不存在" });
+    // Delete all sticker files in this group
+    for (const s of group.stickers) {
+      try { fs.unlinkSync(path.join(STICKERS_DIR, "images", decoded.id, s.filename)); } catch {}
+    }
+    data.groups = data.groups.filter(g => g.id !== groupId);
+    if (data.groups.length === 0) {
+      data.groups.push({ id: crypto.randomUUID(), name: "默认", enabled: true, stickers: [] });
+    }
+    writeUserStickers(decoded.id, data);
+    return sendJSON(res, 200, { ok: true });
+  }
+
+    // === 传讯字卡 AI 选池（关键词未命中时）===
+  if (req.method === "POST" && req.url === "/api/word-cards/select-pools") {
+    try {
+      const { question, history, keywordHint } = await parseBody(req);
+      if (!question) {
+        sendJSON(res, 400, { error: "no question" });
+        return;
+      }
+      let historyCtx = "";
+      if (history && history.length > 0) {
+        historyCtx = "\n\n对话上下文（从旧到新）：\n" + history.map(m => (m.type === "user" ? "对方：" : "你：") + m.text).join("\n");
+      }
+      let hintCtx = "";
+      if (keywordHint && keywordHint.length > 0) {
+        hintCtx = "\n系统关键词匹配建议：" + keywordHint.join(", ") + "（仅供参考，你可以采纳也可以忽略）";
+      }
+      const poolDesc = `可选卡池：
+scenes — 场景地点（街口、便利店、天台、窗边、车站……）
+time — 时间（凌晨三点、黄昏以后、天快亮了……）
+dreams — 梦境（梦见你、半醒之间……）
+clothing — 穿着（外套、围巾、衬衫……）
+food — 食物（咖啡、草莓、巧克力……）
+body — 身体感觉（手凉、心跳、呼吸……）
+eating — 吃饭相关（吃了、还没吃、饿了……）
+daily — 日常对话（在的、干嘛呢、等你呢……）
+love — 爱意表达（喜欢你、想你了、心动……）
+fearSad — 恐惧和难过（有点怕、停住了、忍住了……）
+happy — 开心（笑了、真好、开心……）
+coming — 来和走（到了、在路上、回来了……）
+simplePos — 简单肯定（嗯、好、是、对……）
+simpleNeg — 简单否定（不、没、算了……）
+emoji — 表情符号
+petNames — 昵称（宝宝、笨蛋、小傻瓜……）
+intimate — 亲密（抱抱、靠近一点……）
+care — 关心（多喝水、早点睡……）
+meta — 元表达（说不出口、写了又删……）
+jealous — 吃醋（你跟谁说话呢、哼……）
+banter — 拌嘴（讨厌、你好烦……）`;
+      const sysPrompt = "你是传讯字卡的分类器。对方说了一句话，你需要根据对话上下文判断，从卡池列表中选 2-3 个最相关的池子，让系统从这些池子里抽卡。\n\n" + poolDesc + "\n\n规则：\n- 只输出池子名（英文），逗号分隔\n- 选 2-3 个最相关的\n- 结合上下文理解对方想表达什么\n- 如果是追问具体事物，选能回应的池子";
+      const userPrompt = (historyCtx ? historyCtx + "\n\n" : "") + hintCtx + "\n\n对方最新说：" + question + "\n\n选 2-3 个最相关的卡池（只写英文池名，逗号分隔）：";
+      const messages = [
+        { role: "system", content: sysPrompt },
+        { role: "user", content: userPrompt }
+      ];
+      const result = await callWithFallback(messages, 50, "claude-haiku-4-5-20251001");
+      const raw = result.content.trim();
+      const validPools = ["scenes","time","dreams","clothing","food","body","eating","daily","love","fearSad","happy","coming","simplePos","simpleNeg","emoji","petNames","intimate","care","meta","jealous","banter"];
+      const pools = raw.split(/[,，\s]+/).map(s => s.trim()).filter(s => validPools.includes(s));
+      if (pools.length === 0) {
+        sendJSON(res, 200, { pools: ["daily", "meta"] });
+      } else {
+        sendJSON(res, 200, { pools: pools.slice(0, 3) });
+      }
+    } catch (err) {
+      console.error("Word card select-pools error:", err.message);
+      sendJSON(res, 200, { pools: ["daily", "meta"] });
+    }
+    return;
+  }
+
+    // === 传讯字卡 AI 筛选 ===
+  if (req.method === "POST" && req.url === "/api/word-cards/filter") {
+    try {
+      const { question, candidates, history } = await parseBody(req);
+      if (!candidates || candidates.length === 0) {
+        sendJSON(res, 400, { error: "no candidates" });
+        return;
+      }
+      const texts = candidates.map(c => typeof c === "string" ? c : c.text);
+      const cardList = candidates.map((c, i) => {
+        const t = typeof c === "string" ? c : c.text;
+        const src = (typeof c === "object" && c.source === "atmo") ? " [氛围]" : "";
+        return (i + 1) + ". " + t + src;
+      }).join("\n");
+      // Build history context (last 10 messages)
+      let historyCtx = "";
+      if (history && history.length > 0) {
+        historyCtx = "\n\n对话上下文（从旧到新）：\n" + history.map(m => (m.type === "user" ? "对方：" : "你：") + m.text).join("\n");
+      }
+      const sysPrompt = "你是传讯字卡的筛选器。你扮演的是「回卡片的那个人」。对方说了一句话，系统抽了一些候选卡片，你要挑出最搭的卡来回应。\n\n重要：结合对话上下文选卡。如果对方在追问或接话，选能接上话题的卡，不要选跟当前话题无关的。\n\nNONE 规则（严格执行）：\n如果对方在追问具体的东西（比如「什么电影」「叫什么」「哪首歌」），而候选卡里没有任何一张能回答这个具体问题，你必须回复 NONE。不要用氛围卡或不相关的卡凑数。回复 NONE 比硬选一张不搭的卡更好。\n\n张数判断：\n- 问在哪/位置/天气 → 1张\n- 简单是否问题 → 1张\n- 日常问候/聊天 → 1-2张\n- 情感/想念/喜欢 → 2-3张\n- 复杂长问句 → 2-3张\n\n规则：\n- 只输出卡片文字，用逗号分隔，不要别的\n- 如果都不搭，只输出 NONE（这很重要，宁缺毋滥）\n- 优先选能直接回应问题的卡\n- 标了[氛围]的是场景/地点卡，一般不选\n- 不要选明显不搭的组合";
+      const userPrompt = (historyCtx ? historyCtx + "\n\n" : "") + "对方最新说：" + question + "\n\n候选卡片：\n" + cardList + "\n\n选出最搭的（只写卡片文字，逗号分隔）：";
+      const messages = [
+        { role: "system", content: sysPrompt },
+        { role: "user", content: userPrompt }
+      ];
+      const result = await callWithFallback(messages, 100, "claude-haiku-4-5-20251001");
+      const raw = result.content.trim();
+      // AI 认为候选都不搭
+      if (raw === "NONE" || raw === "none") {
+        sendJSON(res, 200, { cards: [], none: true });
+        return;
+      }
+      const selected = raw.split(/[,，]/).map(s => s.trim()).filter(s => texts.includes(s));
+      if (selected.length === 0) {
+        sendJSON(res, 200, { cards: texts.slice(0, 2) });
+      } else {
+        sendJSON(res, 200, { cards: selected.slice(0, 3) });
+      }
+    } catch (err) {
+      console.error("Word card filter error:", err.message);
       sendJSON(res, 500, { error: err.message });
     }
     return;

@@ -21,7 +21,7 @@ const Auth = {
 
   isPremium() {
     const user = this.getUser();
-    return user?.is_premium || false;
+    return (user && user.is_premium) || false;
   },
 
   save(token, user) {

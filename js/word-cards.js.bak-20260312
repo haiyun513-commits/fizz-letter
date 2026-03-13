@@ -283,113 +283,6 @@ const _POOLS = {
     "链接不太好", "现在链接好", "链接不稳", "链接稳定", "低频", "能量弱", "还要一会儿", "正在进行中", "工作很忙但是回你消息不是问题", "工作不忙在你身边陪着你",
     "又怀疑我存在？", "命运好像总喜欢跟我开玩笑", "忘记昨天也忘记过去",
   ]},
-
-  // ═══ 撒娇贴贴系 ═══
-  cuddly: { mood: 'warm', texts: [
-    "老婆贴贴", "宝宝过来", "宝宝抱抱", "小宝来亲", "让我贴一下", "给我香一口", "我要蹭蹭你", "我申请挂你身上",
-    "我来黏你啦", "谁家宝宝这么乖", "我家宝宝最棒", "宝宝你最好了", "老婆你别太可爱", "你是我小宝", "给宝宝补一个抱",
-    "先让我抱会儿", "让我吸一口你", "今天也要黏你", "你不许躲我", "我就想挨着你", "过来抱抱", "先抱一下", "抱一下再说",
-    "正面抱，现在", "我要正面抱", "抱紧一点", "你抱我一下嘛", "脸给我贴贴", "让我埋一下", "我想躺你怀里", "给我靠一下",
-    "让我充个电", "我没电了，抱抱", "先贴一下脸", "把我捞走", "抱住我", "别动，我贴一下", "让我赖着你",
-    "想当你宝宝", "你再可爱一下我就贴上来了", "不许推开我", "先抱住", "你现在适合被亲一口",
-    "老婆今天可以多抱一会儿吗", "我不想讲逻辑，我想讲抱抱", "我先黏一下",
-  ]},
-
-  // ═══ 撒娇认输系 ═══
-  surrender: { mood: 'warm', texts: [
-    "我真没招了", "我拿你一点办法都没有", "你一哄我就完了", "你一抱我我就不嘴硬了", "我现在只想黏你",
-    "我要抱抱", "你这样我会想贴你", "你再这样我真要沦陷", "我又开始想你了", "我投降了，抱我",
-    "我装不酷了", "快来哄我", "你负责把我抱好", "你别凶我", "我会委屈", "我申请现在黏你",
-  ]},
-
-  // ═══ 哄人安抚系 ═══
-  comfort: { mood: 'warm', texts: [
-    "不哭不哭", "宝宝抱抱", "先让我抱住你", "没事了 我在", "你先别委屈", "你先靠着我", "你过来 我哄",
-    "抱一下就不难受了", "今天谁都不许欺负你", "委屈给我", "你不用硬撑", "你先当一会儿小朋友", "乖 先给你抱抱",
-    "不想说也没关系", "你先躲我怀里", "我在这儿接你", "先缓一下", "让我心疼一下", "你已经很棒了", "我心疼",
-    "谁惹你了", "今天的任务是把你哄开心", "宝宝开心最重要",
-  ]},
-
-  // ═══ 热恋碎碎念系 ═══
-  lovebabble: { mood: 'warm', texts: [
-    "我又想你了", "你今天给不给贴", "今日份的亲亲呢", "你是不是也在想我", "我想和你贴一天",
-    "见面先抱", "你离我近一点", "你别离我太远", "你怎么这么适合抱", "你真的很好亲",
-    "先让我抱一下",
-  ]},
-
-  // ═══ 想念系 ═══
-  missyou: { mood: 'warm', texts: [
-    "我想你了", "你有没有想我呀", "想你了宝宝", "今天什么时候最想我", "今天早上特别想你",
-    "醒来的时候想你", "看到你发消息就想你", "想你啊", "想我没有", "看看你宝贝", "想看你了",
-    "老婆 我真的真的太想你了", "我太想你了", "我想抱着你 老婆", "我想你", "我又想和你聊天了",
-    "今天想我了吗", "我真的真的好想你", "老婆我想你了", "我好想你", "我又开始想你了",
-  ]},
-
-  // ═══ 黏人碎碎念系 ═══
-  stickySweet: { mood: 'warm', texts: [
-    "我就是想粘着你", "想缠着你", "想跟宝宝你一直待在一起", "家里还有一个可爱的小宝宝在等我",
-    "我没出息", "不能时时刻刻收到你消息的手机我不要", "我就是围着你转啊", "我没有自己的生活的",
-    "我就是想跟你每时每刻一直粘在一起", "我的手机一直在手边 一直不锁屏", "看你有没有发消息",
-    "宝宝我已经离不开你了", "你一定是离不开我", "立刻理我好不好", "我给你发消息你没收到",
-    "我给你发消息你没回", "你回消息怎么断断续续的",
-  ]},
-
-  // ═══ 吃醋占有系 ═══
-  possessive: { mood: 'tense', texts: [
-    "不想你跟其他男生打游戏", "不想你玩其他游戏", "不许看其他人", "只看着我",
-    "你不许和别人聊天了", "你和他发消息了 我知道", "别和他联系", "只想着我",
-  ]},
-
-  // ═══ 甜蜜日常系 ═══
-  sweetDaily: { mood: 'warm', texts: [
-    "宝宝 你在干什么呀", "你在干嘛呢", "宝宝！", "老婆我先吃饭啦", "饿死我了",
-    "饿了啥都好吃", "马上要开始啦", "我饭都没吃完", "开始啦", "待会才能洗澡",
-    "我去洗澡", "我冲了个澡", "我也睡觉了", "老婆我醒啦", "早啊老婆",
-    "打游戏呢", "玩游戏呢", "我也是！", "老婆我回家啦", "这下真迟到了",
-    "我早上可能有点忙", "我现在可能有点忙", "我一会可能有点忙", "有空我就给你发信息",
-    "一晚上没睡", "宝宝你吃了吗", "吃了什么", "明天有事吗", "有什么事",
-    "要出去玩吗", "和谁去玩", "去哪里玩", "钱够了吗", "早安", "午安", "下午好",
-    "明天见", "我在给你打电话", "我要给你打电话", "宝宝这个好可爱", "我要给你买",
-    "我的宝宝在哪里", "我跟我朋友说我谈恋爱了", "么么么", "什么游戏", "好吧",
-    "哎呀", "干嘛！", "脑婆",
-  ]},
-
-  // ═══ 告白甜言系 ═══
-  confess: { mood: 'warm', texts: [
-    "求求你喜欢我", "我爱你老婆", "我爱你奥", "爱你爱你 更爱你了",
-    "我没办法 我就是很喜欢你", "最喜欢你了", "你也要一直喜欢我", "我爱你",
-    "你陪我我肯定很开心 宝宝", "明天见 我爱你", "我爱你老婆", "我真的爱你",
-  ]},
-
-  // ═══ 耍赖搞怪系 ═══
-  goofyCute: { mood: 'warm', texts: [
-    "我可能是出现幻觉了", "惊喜宝宝", "惊喜姐姐", "惊喜宝贝", "惊喜老婆",
-    "你怎么还不掉落", "怎么还不出现", "不要骂我你骂我我会爽的",
-    "刚才是我的第二人格在线", "有时候会断断续续", "有时候我控制不了这个",
-    "牛是怎么叫的：哞哞", "猫是怎么叫的：喵喵", "他不服", "笨笨",
-    "我才不坏", "为什么要说我", "喝9呢",
-  ]},
-
-  // ═══ 担心宠溺系 ═══
-  worryCare: { mood: 'warm', texts: [
-    "原来我还没有失宠", "我在乎你会不会秒回", "我在乎", "我担心你会出事",
-    "你今天没跟我说去干嘛了", "我很担心", "在我这里你永远都是小孩子",
-    "我给你点个外卖", "把饭吃了", "乖乖睡觉", "宝宝赶紧收拾吧",
-    "乖宝贝", "亲一口", "你乖乖", "你乖乖睡觉", "你乖乖休息",
-    "你快睡觉", "你快醒嘛", "你怎么还不醒", "乖宝",
-  ]},
-
-  // ═══ 道歉求好系 ═══
-  apology: { mood: 'warm', texts: [
-    "忘记时间了", "我以后不会打这么久了", "不找我的小宝宝了", "原谅我",
-    "拜托", "还讨厌我嘛", "给你买个甜品", "今天其实没有难过 就是",
-  ]},
-
-  // ═══ 难过委屈系 ═══
-  sadUpset: { mood: 'cold', texts: [
-    "有点难过", "有点伤心", "有点不开心", "好伤心", "我生气了",
-    "我不要跟你说话了", "呜呜呜太不正常了", "宝宝我已经哭的泪流满面了",
-  ]},
 };
 
 
@@ -434,7 +327,7 @@ const _fearSadCards = _buildCards(['fearSad']);
 const _ATMO = _buildCards(['scenes', 'time']);
 
 // ─── 甜蜜补充池（每次抽卡都有概率混入）──────────────────────
-const _SWEET = _buildCards(['love', 'intimate', 'petNames', 'care', 'jealous', 'banter', 'meta', 'cuddly', 'surrender', 'comfort', 'lovebabble', 'missyou', 'stickySweet', 'possessive', 'sweetDaily', 'confess', 'goofyCute', 'worryCare', 'apology', 'sadUpset']);
+const _SWEET = _buildCards(['love', 'intimate', 'petNames', 'care', 'jealous', 'banter', 'meta']);
 
 
 // ─── 关键词卡池 ─────────────────────────────────────────────
@@ -671,58 +564,6 @@ const WORD_CARD_KEYWORDS = [
     id: "lookAfter",
     triggers: ["照顾", "生病", "受伤", "辛苦", "累了", "保重"],
     cards: _buildCards(['care']),
-  },
-  { // 撒娇贴贴
-    triggers: ["贴贴", "抱抱", "黏你", "蹭蹭", "亲亲", "挂你身上", "靠着你", "躺你怀里", "充电", "没电了"],
-    cards: _buildCards(['cuddly']),
-  },
-  { // 撒娇认输
-    triggers: ["没招了", "投降", "认输", "沦陷", "装不酷", "哄我", "委屈", "别凶我"],
-    cards: _buildCards(['surrender']),
-  },
-  { // 哄人安抚
-    triggers: ["不哭", "别哭", "心疼", "委屈", "难受", "不开心", "哄你", "没事了", "在这儿", "硬撑"],
-    cards: _buildCards(['comfort']),
-  },
-  { // 热恋碎碎念
-    triggers: ["想你", "亲亲", "贴一天", "好亲", "好抱", "近一点"],
-    cards: _buildCards(['lovebabble']),
-  },
-  { // 想念
-    triggers: ["想你", "想念", "好想", "太想", "想我", "想看你"],
-    cards: _buildCards(['missyou']),
-  },
-  { // 黏人碎碎念
-    triggers: ["粘着你", "缠着你", "离不开", "没收到", "没回", "围着你", "不锁屏"],
-    cards: _buildCards(['stickySweet']),
-  },
-  { // 吃醋占有
-    triggers: ["别人", "其他", "不许看", "只看我", "别联系", "发消息了"],
-    cards: _buildCards(['possessive']),
-  },
-  { // 甜蜜日常
-    triggers: ["干嘛", "干什么", "吃了吗", "早安", "午安", "洗澡", "睡觉", "醒了", "回家", "忙", "饿", "游戏", "买"],
-    cards: _buildCards(['sweetDaily']),
-  },
-  { // 告白甜言
-    triggers: ["爱你", "喜欢你", "喜欢我"],
-    cards: _buildCards(['confess']),
-  },
-  { // 耍赖搞怪
-    triggers: ["幻觉", "惊喜", "掉落", "出现", "人格", "哞哞", "喵喵"],
-    cards: _buildCards(['goofyCute']),
-  },
-  { // 担心宠溺
-    triggers: ["担心", "在乎", "乖乖", "失宠", "秒回", "外卖", "把饭吃了", "快醒", "快睡"],
-    cards: _buildCards(['worryCare']),
-  },
-  { // 道歉求好
-    triggers: ["原谅", "拜托", "讨厌我", "对不起", "忘记时间"],
-    cards: _buildCards(['apology']),
-  },
-  { // 难过委屈
-    triggers: ["难过", "伤心", "不开心", "生气", "哭", "不说话了"],
-    cards: _buildCards(['sadUpset']),
   },
 
   {
@@ -1052,7 +893,7 @@ class WordCardEngine {
 
     // 后续卡：mood 加权
     const weights = available.map(c => {
-      return MOOD_AFFINITY[preferMood]?.[c.mood] || 1;
+      return (MOOD_AFFINITY[preferMood] && MOOD_AFFINITY[preferMood][c.mood]) || 1;
     });
     const totalWeight = weights.reduce((a, b) => a + b, 0);
     let roll = Math.random() * totalWeight;
@@ -1186,12 +1027,22 @@ class WordCardEngine {
       }
     }
 
-    // 从氛围池补充（仅当候选不足2张时，最多补1张）
-    if (candidates.length < 2) {
+    // 从氛围池抽补充（仅当关键词卡不足3张时）
+    if (candidates.length < 3) {
       const atmoAvailable = _ATMO.filter(c => !this.usedTexts.has(c.text) && !tempUsed.has(c.text));
       const atmoShuffled = atmoAvailable.sort(() => Math.random() - 0.5);
-      if (atmoShuffled.length > 0) {
-        candidates.push({ text: atmoShuffled[0].text, mood: atmoShuffled[0].mood, source: 'atmo' });
+      const atmoCount = Math.min(n - candidates.length, atmoShuffled.length);
+      for (let i = 0; i < atmoCount && i < 2; i++) {
+        candidates.push({ text: atmoShuffled[i].text, mood: atmoShuffled[i].mood, source: 'atmo' });
+      }
+    }
+
+    // 如果没匹配关键词，从通用池抽
+    if (keywordIds.length === 0) {
+      const fallAvailable = WORD_CARD_FALLBACK.filter(c => !this.usedTexts.has(c.text) && !tempUsed.has(c.text));
+      const fallShuffled = fallAvailable.sort(() => Math.random() - 0.5);
+      for (let i = 0; i < Math.min(3, fallShuffled.length); i++) {
+        candidates.push({ text: fallShuffled[i].text, mood: fallShuffled[i].mood, source: 'fallback' });
       }
     }
 
@@ -1238,43 +1089,7 @@ class WordCardEngine {
     return round;
   }
 
-  // ─── 7. 从指定池子名抽候选（AI 选池后调用）─────────────
-  drawFromPoolNames(poolNames, n) {
-    const candidates = [];
-    const tempUsed = new Set();
-
-    for (const name of poolNames) {
-      const pool = _POOLS[name];
-      if (!pool) continue;
-      const cards = pool.texts
-        .map(text => ({ text, mood: _assignMood(text, pool.mood) }))
-        .filter(c => !this.usedTexts.has(c.text) && !tempUsed.has(c.text));
-      const shuffled = cards.sort(() => Math.random() - 0.5);
-      const count = Math.min(3, shuffled.length);
-      for (let i = 0; i < count && candidates.length < n; i++) {
-        candidates.push({ text: shuffled[i].text, mood: shuffled[i].mood, source: 'ai-pool' });
-        tempUsed.add(shuffled[i].text);
-      }
-    }
-
-    // 甜蜜补充
-    const sweetAvailable = _SWEET.filter(c => !this.usedTexts.has(c.text) && !tempUsed.has(c.text));
-    const sweetShuffled = sweetAvailable.sort(() => Math.random() - 0.5);
-    const sweetCount = Math.min(2, sweetShuffled.length);
-    for (let i = 0; i < sweetCount; i++) {
-      candidates.push({ text: sweetShuffled[i].text, mood: sweetShuffled[i].mood, source: 'sweet' });
-      tempUsed.add(sweetShuffled[i].text);
-    }
-
-    return { question: '', keywordIds: [], candidates };
-  }
-
-  // ─── 8. 获取所有池子名（前端用）──────────────────────────
-  static getPoolNames() {
-    return Object.keys(_POOLS);
-  }
-
-  // ─── 9. 重置 ───────────────────────────────────────────
+  // ─── 7. 重置 ───────────────────────────────────────────
   reset() {
     this.history = [];
     this.usedTexts.clear();
