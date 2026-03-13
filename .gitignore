@@ -7,3 +7,5 @@ stats.json
 *.bak
 *.bak2
 *.bak3
+data/
+*.bak-*

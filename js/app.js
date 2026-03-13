@@ -38,15 +38,31 @@ document.addEventListener('DOMContentLoaded', () => {
   // === 认证 ===
   const authModal = document.getElementById('auth-modal');
 
+  async function loadCredits() {
+    var creditsEl = document.getElementById('auth-credits');
+    if (!creditsEl) return;
+    try {
+      var res = await fetch('/api/credits', { headers: Auth.authHeaders() });
+      var data = await res.json();
+      if (data.credits !== undefined) {
+        creditsEl.textContent = data.credits + ' 积分';
+        creditsEl.style.display = '';
+      }
+    } catch(e) { creditsEl.style.display = 'none'; }
+  }
+
   function updateAuthUI() {
     if (Auth.isLoggedIn()) {
       const user = Auth.getUser();
       document.getElementById('auth-area').style.display = 'none';
       document.getElementById('auth-user-area').style.display = 'flex';
       document.getElementById('auth-nickname').textContent = user?.nickname || '';
+      loadCredits();
     } else {
       document.getElementById('auth-area').style.display = 'flex';
       document.getElementById('auth-user-area').style.display = 'none';
+      var creditsEl = document.getElementById('auth-credits');
+      if (creditsEl) creditsEl.style.display = 'none';
     }
   }
 
@@ -58,25 +74,25 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('auth-form-forgot').style.display = form === 'forgot' ? 'block' : 'none';
   }
 
-  document.getElementById('btn-login').addEventListener('click', () => {
+  var _el_btn_login=document.getElementById('btn-login'); if(_el_btn_login) _el_btn_login.addEventListener('click', () => {
     authModal.style.display = 'flex';
     showAuthForm('login');
   });
 
-  document.getElementById('auth-modal-close').addEventListener('click', () => {
+  var _el_auth_modal_close=document.getElementById('auth-modal-close'); if(_el_auth_modal_close) _el_auth_modal_close.addEventListener('click', () => {
     authModal.style.display = 'none';
   });
   authModal.addEventListener('click', (e) => {
     if (e.target === authModal) authModal.style.display = 'none';
   });
 
-  document.getElementById('show-register').addEventListener('click', () => showAuthForm('register'));
-  document.getElementById('show-login').addEventListener('click', () => showAuthForm('login'));
-  document.getElementById('show-forgot').addEventListener('click', () => showAuthForm('forgot'));
-  document.getElementById('forgot-back-login').addEventListener('click', () => showAuthForm('login'));
+  var _el_show_register=document.getElementById('show-register'); if(_el_show_register) _el_show_register.addEventListener('click', () => showAuthForm('register'));
+  var _el_show_login=document.getElementById('show-login'); if(_el_show_login) _el_show_login.addEventListener('click', () => showAuthForm('login'));
+  var _el_show_forgot=document.getElementById('show-forgot'); if(_el_show_forgot) _el_show_forgot.addEventListener('click', () => showAuthForm('forgot'));
+  var _el_forgot_back_login=document.getElementById('forgot-back-login'); if(_el_forgot_back_login) _el_forgot_back_login.addEventListener('click', () => showAuthForm('login'));
 
   // 忘记密码
-  document.getElementById('btn-do-forgot').addEventListener('click', async () => {
+  var _el_btn_do_forgot=document.getElementById('btn-do-forgot'); if(_el_btn_do_forgot) _el_btn_do_forgot.addEventListener('click', async () => {
     const email = document.getElementById('forgot-email').value;
     const errorEl = document.getElementById('forgot-error');
     const successEl = document.getElementById('forgot-success');
@@ -97,7 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  document.getElementById('btn-do-login').addEventListener('click', async () => {
+  var _el_btn_do_login=document.getElementById('btn-do-login'); if(_el_btn_do_login) _el_btn_do_login.addEventListener('click', async () => {
     const email = document.getElementById('login-email').value;
     const password = document.getElementById('login-password').value;
     const errorEl = document.getElementById('login-error');
@@ -111,7 +127,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  document.getElementById('btn-do-register').addEventListener('click', async () => {
+  var _el_btn_do_register=document.getElementById('btn-do-register'); if(_el_btn_do_register) _el_btn_do_register.addEventListener('click', async () => {
     const email = document.getElementById('register-email').value;
     const nickname = document.getElementById('register-nickname').value;
     const password = document.getElementById('register-password').value;
@@ -126,18 +142,33 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  document.getElementById('btn-logout').addEventListener('click', () => {
+  var _el_btn_logout=document.getElementById('btn-logout'); if(_el_btn_logout) _el_btn_logout.addEventListener('click', () => {
     Auth.logout();
     showScreen('welcome');
     updateAuthUI();
   });
 
   // === 设置页 ===
-  document.getElementById('btn-settings').addEventListener('click', () => {
+  var _el_btn_settings=document.getElementById('btn-settings'); if(_el_btn_settings) _el_btn_settings.addEventListener('click', () => {
     const user = Auth.getUser();
     if (!user) return;
     document.getElementById('settings-nickname').value = user.nickname || '';
     document.getElementById('settings-email').textContent = user.email || '';
+    // 加载用户头像预览
+    try {
+      var avatarRaw = localStorage.getItem('wc-avatars');
+      var avatarObj = avatarRaw ? JSON.parse(avatarRaw) : {};
+      var previewImg = document.getElementById('settings-avatar-img');
+      var placeholder = document.querySelector('.settings-avatar-placeholder');
+      if (previewImg && avatarObj.me) {
+        previewImg.src = avatarObj.me;
+        previewImg.style.display = 'block';
+        if (placeholder) placeholder.style.display = 'none';
+      } else if (previewImg) {
+        previewImg.style.display = 'none';
+        if (placeholder) placeholder.style.display = '';
+      }
+    } catch(e) {}
     document.getElementById('settings-old-pwd').value = '';
     document.getElementById('settings-new-pwd').value = '';
     document.getElementById('settings-confirm-pwd').value = '';
@@ -147,12 +178,55 @@ document.addEventListener('DOMContentLoaded', () => {
     showScreen('settings');
   });
 
-  document.getElementById('btn-settings-back').addEventListener('click', () => {
+  var _el_btn_settings_back=document.getElementById('btn-settings-back'); if(_el_btn_settings_back) _el_btn_settings_back.addEventListener('click', () => {
     showScreen('welcome');
   });
 
+  // 设置页头像上传
+  var _settingsAvatarFile = document.getElementById('settings-avatar-file');
+  if (_settingsAvatarFile) {
+    _settingsAvatarFile.addEventListener('change', function(e) {
+      var file = e.target.files[0];
+      if (!file || !file.type.startsWith('image/')) return;
+      var reader = new FileReader();
+      reader.onload = function() {
+        var img = new Image();
+        img.onload = function() {
+          var c = document.createElement('canvas');
+          c.width = 128; c.height = 128;
+          var ctx = c.getContext('2d');
+          var s = Math.min(img.width, img.height);
+          var sx = (img.width - s) / 2;
+          var sy = (img.height - s) / 2;
+          ctx.drawImage(img, sx, sy, s, s, 0, 0, 128, 128);
+          var dataUrl = c.toDataURL('image/jpeg', 0.8);
+          // 保存到 wc-avatars
+          var raw = localStorage.getItem('wc-avatars');
+          var obj = raw ? JSON.parse(raw) : {};
+          obj.me = dataUrl;
+          localStorage.setItem('wc-avatars', JSON.stringify(obj));
+          // 更新预览
+          var previewImg = document.getElementById('settings-avatar-img');
+          var placeholder = document.querySelector('.settings-avatar-placeholder');
+          if (previewImg) { previewImg.src = dataUrl; previewImg.style.display = 'block'; }
+          if (placeholder) placeholder.style.display = 'none';
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+      _settingsAvatarFile.value = '';
+    });
+  }
+  // 点击头像预览也触发上传
+  var _settingsAvatarPreview = document.getElementById('settings-avatar-preview');
+  if (_settingsAvatarPreview && _settingsAvatarFile) {
+    _settingsAvatarPreview.addEventListener('click', function() {
+      _settingsAvatarFile.click();
+    });
+  }
+
   // 保存昵称
-  document.getElementById('btn-save-nickname').addEventListener('click', async () => {
+  var _el_btn_save_nickname=document.getElementById('btn-save-nickname'); if(_el_btn_save_nickname) _el_btn_save_nickname.addEventListener('click', async () => {
     const nickname = document.getElementById('settings-nickname').value;
     const msgEl = document.getElementById('nickname-msg');
     msgEl.textContent = '';
@@ -179,7 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // 修改密码
-  document.getElementById('btn-save-password').addEventListener('click', async () => {
+  var _el_btn_save_password=document.getElementById('btn-save-password'); if(_el_btn_save_password) _el_btn_save_password.addEventListener('click', async () => {
     const oldPassword = document.getElementById('settings-old-pwd').value;
     const newPassword = document.getElementById('settings-new-pwd').value;
     const confirmPwd = document.getElementById('settings-confirm-pwd').value;
@@ -212,18 +286,18 @@ document.addEventListener('DOMContentLoaded', () => {
   let mailboxLetters = [];
   let currentMailboxIndex = -1; // 存储信件数据
 
-  document.getElementById('btn-mailbox').addEventListener('click', () => {
+  var _el_btn_mailbox=document.getElementById('btn-mailbox'); if(_el_btn_mailbox) _el_btn_mailbox.addEventListener('click', () => {
     showScreen('mailboxHome');
     PenPal.loadMailbox();
   });
 
-  document.getElementById('btn-mailbox-back').addEventListener('click', () => {
+  var _el_btn_mailbox_back=document.getElementById('btn-mailbox-back'); if(_el_btn_mailbox_back) _el_btn_mailbox_back.addEventListener('click', () => {
     showScreen('mailboxHome');
     PenPal.loadMailbox();
   });
 
   // 详情返回 → 回到泡沫邮箱首页
-  document.getElementById('btn-detail-back').addEventListener('click', () => {
+  var _el_btn_detail_back=document.getElementById('btn-detail-back'); if(_el_btn_detail_back) _el_btn_detail_back.addEventListener('click', () => {
     document.getElementById('mailbox-detail').style.display = 'none';
     showScreen('mailboxHome');
     PenPal.loadMailbox();
@@ -411,7 +485,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // 删除信箱条目
-  document.getElementById('btn-detail-delete').addEventListener('click', async () => {
+  var _el_btn_detail_delete=document.getElementById('btn-detail-delete'); if(_el_btn_detail_delete) _el_btn_detail_delete.addEventListener('click', async () => {
     if (currentMailboxIndex < 0) return;
     const l = mailboxLetters[currentMailboxIndex];
     if (!l) return;
@@ -426,16 +500,16 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // 兑换码弹窗
-  document.getElementById('btn-redeem').addEventListener('click', () => {
+  var _el_btn_redeem=document.getElementById('btn-redeem'); if(_el_btn_redeem) _el_btn_redeem.addEventListener('click', () => {
     document.getElementById('redeem-modal').style.display = 'flex';
   });
-  document.getElementById('redeem-modal-close').addEventListener('click', () => {
+  var _el_redeem_modal_close=document.getElementById('redeem-modal-close'); if(_el_redeem_modal_close) _el_redeem_modal_close.addEventListener('click', () => {
     document.getElementById('redeem-modal').style.display = 'none';
   });
-  document.getElementById('redeem-modal').addEventListener('click', (e) => {
+  var _el_redeem_modal=document.getElementById('redeem-modal'); if(_el_redeem_modal) _el_redeem_modal.addEventListener('click', (e) => {
     if (e.target.id === 'redeem-modal') e.target.style.display = 'none';
   });
-  document.getElementById('btn-do-redeem').addEventListener('click', async () => {
+  var _el_btn_do_redeem=document.getElementById('btn-do-redeem'); if(_el_btn_do_redeem) _el_btn_do_redeem.addEventListener('click', async () => {
     const code = document.getElementById('redeem-code').value;
     const errorEl = document.getElementById('redeem-error');
     const successEl = document.getElementById('redeem-success');
@@ -458,7 +532,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ═══ 信友系统事件 ═══
 
   // Mailbox home → back to welcome
-  document.getElementById('btn-mailbox-home-back').addEventListener('click', () => {
+  var _el_btn_mailbox_home_back=document.getElementById('btn-mailbox-home-back'); if(_el_btn_mailbox_home_back) _el_btn_mailbox_home_back.addEventListener('click', () => {
     showScreen('welcome');
   });
 
@@ -466,18 +540,18 @@ document.addEventListener('DOMContentLoaded', () => {
   // btn-add-penpal removed from UI
 
   // Create pen pal screen → back
-  document.getElementById('btn-create-back').addEventListener('click', () => {
+  var _el_btn_create_back=document.getElementById('btn-create-back'); if(_el_btn_create_back) _el_btn_create_back.addEventListener('click', () => {
     showScreen('mailboxHome');
     PenPal.loadMailbox();
   });
 
   // Name input char count
-  document.getElementById('penpal-name-input').addEventListener('input', (e) => {
+  var _el_penpal_name_input=document.getElementById('penpal-name-input'); if(_el_penpal_name_input) _el_penpal_name_input.addEventListener('input', (e) => {
     document.getElementById('penpal-name-count').textContent = e.target.value.length;
   });
 
   // Do create pen pal (with optional initial letter from "回一封信")
-  document.getElementById('btn-do-create').addEventListener('click', async () => {
+  var _el_btn_do_create=document.getElementById('btn-do-create'); if(_el_btn_do_create) _el_btn_do_create.addEventListener('click', async () => {
     const name = document.getElementById('penpal-name-input').value;
     if (!name.trim()) return;
     const initialLetter = window._pendingInitialLetter || null;
@@ -490,23 +564,23 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Detail → back to mailbox home
-  document.getElementById('btn-detail-back-home').addEventListener('click', () => {
+  var _el_btn_detail_back_home=document.getElementById('btn-detail-back-home'); if(_el_btn_detail_back_home) _el_btn_detail_back_home.addEventListener('click', () => {
     PenPal.stopPolling();
     showScreen('mailboxHome');
     PenPal.loadMailbox();
   });
 
   // Tab switching
-  document.getElementById('tab-letters').addEventListener('click', () => PenPal.switchTab('letters'));
-  document.getElementById('tab-fragments').addEventListener('click', () => PenPal.switchTab('fragments'));
+  var _el_tab_letters=document.getElementById('tab-letters'); if(_el_tab_letters) _el_tab_letters.addEventListener('click', () => PenPal.switchTab('letters'));
+  var _el_tab_fragments=document.getElementById('tab-fragments'); if(_el_tab_fragments) _el_tab_fragments.addEventListener('click', () => PenPal.switchTab('fragments'));
 
   // Letter input char count
-  document.getElementById('letter-input').addEventListener('input', (e) => {
+  var _el_letter_input=document.getElementById('letter-input'); if(_el_letter_input) _el_letter_input.addEventListener('input', (e) => {
     document.getElementById('letter-char-count').textContent = e.target.value.length;
   });
 
   // Send letter
-  document.getElementById('btn-send-letter').addEventListener('click', () => {
+  var _el_btn_send_letter=document.getElementById('btn-send-letter'); if(_el_btn_send_letter) _el_btn_send_letter.addEventListener('click', () => {
     const content = document.getElementById('letter-input').value;
     if (PenPal.currentPenPalId && content.trim()) {
       PenPal.sendLetter(PenPal.currentPenPalId, content);
@@ -514,7 +588,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Send fragment
-  document.getElementById('btn-send-fragment').addEventListener('click', () => {
+  var _el_btn_send_fragment=document.getElementById('btn-send-fragment'); if(_el_btn_send_fragment) _el_btn_send_fragment.addEventListener('click', () => {
     const content = document.getElementById('fragment-input').value;
     if (PenPal.currentPenPalId && (content.trim() || PenPal.fragmentImage)) {
       PenPal.sendFragment(PenPal.currentPenPalId, content);
@@ -522,7 +596,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Instant letter (一念即达)
-  document.getElementById('btn-instant-letter').addEventListener('click', () => {
+  var _el_btn_instant_letter=document.getElementById('btn-instant-letter'); if(_el_btn_instant_letter) _el_btn_instant_letter.addEventListener('click', () => {
     const content = document.getElementById('letter-input').value;
     if (PenPal.currentPenPalId) {
       PenPal.sendLetter(PenPal.currentPenPalId, content, true);
@@ -530,7 +604,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Instant fragment (一念即达)
-  document.getElementById('btn-instant-fragment').addEventListener('click', () => {
+  var _el_btn_instant_fragment=document.getElementById('btn-instant-fragment'); if(_el_btn_instant_fragment) _el_btn_instant_fragment.addEventListener('click', () => {
     console.log('[DEBUG] 一念即达 clicked, penPalId:', PenPal.currentPenPalId, 'content:', document.getElementById('fragment-input').value, 'image:', !!PenPal.fragmentImage);
     const content = document.getElementById('fragment-input').value;
     if (PenPal.currentPenPalId) {
@@ -541,10 +615,10 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Init fragment image upload
-  PenPal.initFragmentImage();
+  if (typeof PenPal !== "undefined") PenPal.initFragmentImage();
 
   // Pen pal detail menu
-  document.getElementById('btn-penpal-menu').addEventListener('click', () => {
+  var _el_btn_penpal_menu=document.getElementById('btn-penpal-menu'); if(_el_btn_penpal_menu) _el_btn_penpal_menu.addEventListener('click', () => {
     const popup = document.getElementById('penpal-menu-popup');
     popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
   });
@@ -560,7 +634,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Archive pen pal
-  document.getElementById('btn-archive-penpal').addEventListener('click', async () => {
+  var _el_btn_archive_penpal=document.getElementById('btn-archive-penpal'); if(_el_btn_archive_penpal) _el_btn_archive_penpal.addEventListener('click', async () => {
     document.getElementById('penpal-menu-popup').style.display = 'none';
     if (PenPal.currentPenPalId) {
       if (await FizzUI.confirm('确定要归档这位信友吗？')) {
@@ -573,7 +647,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  document.getElementById('btn-delete-penpal').addEventListener('click', async () => {
+  var _el_btn_delete_penpal=document.getElementById('btn-delete-penpal'); if(_el_btn_delete_penpal) _el_btn_delete_penpal.addEventListener('click', async () => {
     document.getElementById('penpal-menu-popup').style.display = 'none';
     if (PenPal.currentPenPalId) {
       if (await FizzUI.confirm('确定要删除这位信友吗？\n所有信件和碎片都会被永久删除，无法恢复。', {danger: true, confirmText: '删除'})) {
@@ -586,13 +660,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  document.getElementById('btn-empty-start').addEventListener('click', () => {
+  var _el_btn_empty_start=document.getElementById('btn-empty-start'); if(_el_btn_empty_start) _el_btn_empty_start.addEventListener('click', () => {
     showScreen('letter');
     if (typeof generateLetter === 'function') generateLetter();
   });
 
   // Archive toggle
-  document.getElementById('archive-toggle').addEventListener('click', () => {
+  var _el_archive_toggle=document.getElementById('archive-toggle'); if(_el_archive_toggle) _el_archive_toggle.addEventListener('click', () => {
     const toggle = document.getElementById('archive-toggle');
     const list = document.getElementById('archive-list');
     const isOpen = list.style.display !== 'none';
@@ -601,20 +675,20 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Mail settings modal
-  document.getElementById('btn-mail-settings').addEventListener('click', () => {
+  var _el_btn_mail_settings=document.getElementById('btn-mail-settings'); if(_el_btn_mail_settings) _el_btn_mail_settings.addEventListener('click', () => {
     document.getElementById('mail-settings-modal').style.display = 'flex';
     PenPal.loadSettings();
   });
 
-  document.getElementById('mail-settings-close').addEventListener('click', () => {
+  var _el_mail_settings_close=document.getElementById('mail-settings-close'); if(_el_mail_settings_close) _el_mail_settings_close.addEventListener('click', () => {
     document.getElementById('mail-settings-modal').style.display = 'none';
   });
 
-  document.getElementById('mail-settings-modal').addEventListener('click', (e) => {
+  var _el_mail_settings_modal=document.getElementById('mail-settings-modal'); if(_el_mail_settings_modal) _el_mail_settings_modal.addEventListener('click', (e) => {
     if (e.target.id === 'mail-settings-modal') e.target.style.display = 'none';
   });
 
-  document.getElementById('email-notify-toggle').addEventListener('change', (e) => {
+  var _el_email_notify_toggle=document.getElementById('email-notify-toggle'); if(_el_email_notify_toggle) _el_email_notify_toggle.addEventListener('change', (e) => {
     PenPal.saveSettings({ email_notify: e.target.checked });
   });
 
@@ -638,14 +712,14 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // Allow Enter key to create pen pal
-  document.getElementById('penpal-name-input').addEventListener('keydown', (e) => {
+  var _el_penpal_name_input=document.getElementById('penpal-name-input'); if(_el_penpal_name_input) _el_penpal_name_input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       document.getElementById('btn-do-create').click();
     }
   });
 
   // Allow Enter key (with Ctrl/Cmd) to send letter
-  document.getElementById('letter-input').addEventListener('keydown', (e) => {
+  var _el_letter_input=document.getElementById('letter-input'); if(_el_letter_input) _el_letter_input.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       document.getElementById('btn-send-letter').click();
     }
@@ -723,29 +797,29 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // 泡沫邮局
-  document.getElementById('contact-toggle').addEventListener('click', () => {
+  var _el_contact_toggle=document.getElementById('contact-toggle'); if(_el_contact_toggle) _el_contact_toggle.addEventListener('click', () => {
     document.getElementById('contact-popup').classList.toggle('show');
   });
 
   // 开始按钮
-  document.getElementById('btn-start').addEventListener('click', () => {
+  var _el_btn_start=document.getElementById('btn-start'); if(_el_btn_start) _el_btn_start.addEventListener('click', () => {
     showScreen('bubbles');
     manager.startRound();
   });
 
   // 返回首页
-  document.getElementById('btn-back-home').addEventListener('click', () => {
+  var _el_btn_back_home=document.getElementById('btn-back-home'); if(_el_btn_back_home) _el_btn_back_home.addEventListener('click', () => {
     manager.reset();
     showScreen('welcome');
   });
 
   // 换一组按钮
-  document.getElementById('btn-shuffle').addEventListener('click', () => {
+  var _el_btn_shuffle=document.getElementById('btn-shuffle'); if(_el_btn_shuffle) _el_btn_shuffle.addEventListener('click', () => {
     manager.shuffle();
   });
 
   // 跳过（如果这轮只选了一个就想继续）
-  document.getElementById('btn-skip').addEventListener('click', () => {
+  var _el_btn_skip=document.getElementById('btn-skip'); if(_el_btn_skip) _el_btn_skip.addEventListener('click', () => {
     if (manager.selectedThisRound > 0) {
       manager.completeRound();
     }
@@ -765,12 +839,12 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // 发送/跳过倾诉
-  document.getElementById('btn-send-message').addEventListener('click', () => {
+  var _el_btn_send_message=document.getElementById('btn-send-message'); if(_el_btn_send_message) _el_btn_send_message.addEventListener('click', () => {
     const userMessage = document.getElementById('user-message').value;
     generateLetter(manager.selectedWords, userMessage);
   });
 
-  document.getElementById('btn-skip-message').addEventListener('click', () => {
+  var _el_btn_skip_message=document.getElementById('btn-skip-message'); if(_el_btn_skip_message) _el_btn_skip_message.addEventListener('click', () => {
     generateLetter(manager.selectedWords, '');
   });
 
@@ -860,7 +934,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // 截图保存（原生 Canvas，3:4 竖屏比例）
-  document.getElementById('btn-screenshot').addEventListener('click', async () => {
+  var _el_btn_screenshot=document.getElementById('btn-screenshot'); if(_el_btn_screenshot) _el_btn_screenshot.addEventListener('click', async () => {
     const bodyEl = document.getElementById('letter-body');
     const isDark = currentTheme === 'dark';
 
@@ -973,7 +1047,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // 回一封信 — 用当前信件内容创建信友
-  document.getElementById('btn-reply-letter').addEventListener('click', () => {
+  var _el_btn_reply_letter=document.getElementById('btn-reply-letter'); if(_el_btn_reply_letter) _el_btn_reply_letter.addEventListener('click', () => {
     if (!Auth.isLoggedIn()) {
       document.getElementById('auth-modal').style.display = 'flex';
       return;
@@ -988,7 +1062,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // 再来一次
-  document.getElementById('btn-restart').addEventListener('click', () => {
+  var _el_btn_restart=document.getElementById('btn-restart'); if(_el_btn_restart) _el_btn_restart.addEventListener('click', () => {
     manager.reset();
     document.getElementById('user-message').value = '';
     const bodyEl = document.getElementById('letter-body');
@@ -999,22 +1073,22 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ===== 答案之书 =====
-  const answerBook = new AnswerBook();
+  const answerBook = typeof AnswerBook !== 'undefined' ? new AnswerBook() : null;
 
   // 进入答案之书
-  document.getElementById('btn-answer-book').addEventListener('click', () => {
+  var _el_btn_answer_book=document.getElementById('btn-answer-book'); if(_el_btn_answer_book) _el_btn_answer_book.addEventListener('click', () => {
     showScreen('answerInput');
   });
 
   // 返回首页
-  document.getElementById('btn-answer-back').addEventListener('click', () => {
+  var _el_btn_answer_back=document.getElementById('btn-answer-back'); if(_el_btn_answer_back) _el_btn_answer_back.addEventListener('click', () => {
     document.getElementById('answer-question').value = '';
     showScreen('welcome');
   });
 
   // 翻开答案
   let _flippingAnswer = false;
-  document.getElementById('btn-flip-answer').addEventListener('click', async () => {
+  var _el_btn_flip_answer=document.getElementById('btn-flip-answer'); if(_el_btn_flip_answer) _el_btn_flip_answer.addEventListener('click', async () => {
     if (_flippingAnswer) return;
     _flippingAnswer = true;
     const btn = document.getElementById('btn-flip-answer');
@@ -1023,6 +1097,7 @@ document.addEventListener('DOMContentLoaded', () => {
     showScreen('answerLoading');
 
     try {
+      if (!answerBook) { showScreen("welcome"); return; }
       const result = await answerBook.getAnswer(question);
       // 翻书动画至少显示 1.5 秒
       await new Promise(r => setTimeout(r, 1500));
@@ -1031,6 +1106,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       console.log('Answer API unavailable, using fallback:', err.message);
       await new Promise(r => setTimeout(r, 1200));
+      if (!answerBook) { showScreen("welcome"); return; }
       const result = answerBook.getFallbackAnswer(question);
       displayAnswer(result);
       Auth.saveToMailbox('answer', result.response, { word: result.word, question: question || undefined });
@@ -1061,12 +1137,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // 再问一次
-  document.getElementById('btn-answer-again').addEventListener('click', () => {
+  var _el_btn_answer_again=document.getElementById('btn-answer-again'); if(_el_btn_answer_again) _el_btn_answer_again.addEventListener('click', () => {
     showScreen('answerInput');
   });
 
   // 保存答案（Canvas 截图）
-  document.getElementById('btn-answer-save').addEventListener('click', () => {
+  var _el_btn_answer_save=document.getElementById('btn-answer-save'); if(_el_btn_answer_save) _el_btn_answer_save.addEventListener('click', () => {
     const wordEl = document.getElementById('answer-word');
     const responseEl = document.getElementById('answer-response');
     const isDark = currentTheme === 'dark';
@@ -1373,27 +1449,27 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // 进入语言之间
-  document.getElementById('btn-between-words').addEventListener('click', () => {
+  var _el_btn_between_words=document.getElementById('btn-between-words'); if(_el_btn_between_words) _el_btn_between_words.addEventListener('click', () => {
     resetBetween();
     showScreen('between');
     setTimeout(() => generateDecorativeOrbs(), 300);
   });
 
   // 抽 / 翻开 按钮（两阶段复用）
-  document.getElementById('btn-draw').addEventListener('click', () => {
+  var _el_btn_draw=document.getElementById('btn-draw'); if(_el_btn_draw) _el_btn_draw.addEventListener('click', () => {
     if (betweenPhase === 'idle') blindDraw();
     else if (betweenPhase === 'drawn') revealCards();
   });
 
   // 再来一次
-  document.getElementById('btn-between-again').addEventListener('click', () => {
+  var _el_btn_between_again=document.getElementById('btn-between-again'); if(_el_btn_between_again) _el_btn_between_again.addEventListener('click', () => {
     resetBetween();
     document.getElementById('orb-container').innerHTML = '';
     setTimeout(() => generateDecorativeOrbs(), 300);
   });
 
   // 返回首页
-  document.getElementById('btn-between-home').addEventListener('click', () => {
+  var _el_btn_between_home=document.getElementById('btn-between-home'); if(_el_btn_between_home) _el_btn_between_home.addEventListener('click', () => {
     showScreen('welcome');
   });
 
@@ -1414,7 +1490,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 'image/png');
   }
 
-  document.getElementById('btn-between-save').addEventListener('click', () => {
+  var _el_btn_between_save=document.getElementById('btn-between-save'); if(_el_btn_between_save) _el_btn_between_save.addEventListener('click', () => {
     const isDark = currentTheme === 'dark';
     const canvasW = 600;
     const canvasH = 800;
@@ -1514,7 +1590,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ===== 塔罗 =====
-  const tarotDeck = new TarotDeck();
+  const tarotDeck = typeof TarotDeck !== 'undefined' ? new TarotDeck() : null;
 
   // 进入塔罗
   // 进入占卜选择
@@ -1527,17 +1603,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   // 返回
-  document.getElementById('btn-tarot-back').addEventListener('click', () => {
+  var _el_btn_tarot_back=document.getElementById('btn-tarot-back'); if(_el_btn_tarot_back) _el_btn_tarot_back.addEventListener('click', () => {
     showScreen('divination');
   });
 
   // 抽牌
-  document.getElementById('btn-tarot-draw').addEventListener('click', async () => {
+  var _el_btn_tarot_draw=document.getElementById('btn-tarot-draw'); if(_el_btn_tarot_draw) _el_btn_tarot_draw.addEventListener('click', async () => {
     const question = document.getElementById('tarot-question').value;
     showScreen('tarotLoading');
 
     // 抽牌
-    const card = tarotDeck.drawCard();
+    if (!tarotDeck) { showScreen("welcome"); return; }
+      const card = tarotDeck.drawCard();
 
     try {
       const moodPromise = tarotDeck.getMood(question);
@@ -1591,18 +1668,18 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // 再抽一张
-  document.getElementById('btn-tarot-again').addEventListener('click', () => {
+  var _el_btn_tarot_again=document.getElementById('btn-tarot-again'); if(_el_btn_tarot_again) _el_btn_tarot_again.addEventListener('click', () => {
     document.getElementById('tarot-question').value = '';
     showScreen('tarotInput');
   });
 
   // 返回首页
-  document.getElementById('btn-tarot-home').addEventListener('click', () => {
+  var _el_btn_tarot_home=document.getElementById('btn-tarot-home'); if(_el_btn_tarot_home) _el_btn_tarot_home.addEventListener('click', () => {
     showScreen('welcome');
   });
 
   // 保存塔罗（Canvas 截图）
-  document.getElementById('btn-tarot-save').addEventListener('click', () => {
+  var _el_btn_tarot_save=document.getElementById('btn-tarot-save'); if(_el_btn_tarot_save) _el_btn_tarot_save.addEventListener('click', () => {
     const isDark = currentTheme === 'dark';
     const canvasW = 600;
     const canvasH = 800;
@@ -1632,7 +1709,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 用卡片图片绘制
-    const card = tarotDeck.currentCard;
+    const card = tarotDeck ? tarotDeck.currentCard : null;
     const cardImg = document.getElementById('tarot-card-img');
     const imgEl = new Image();
     imgEl.crossOrigin = 'anonymous';
@@ -1716,7 +1793,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ===== 雷诺曼 =====
-  const lenormandDeck = new LenormandDeck();
+  const lenormandDeck = typeof LenormandDeck !== 'undefined' ? new LenormandDeck() : null;
 
   document.getElementById("btn-lenormand-back").addEventListener("click", () => {
     showScreen("divination");
@@ -1726,7 +1803,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const question = document.getElementById("lenormand-question").value;
     showScreen("lenormandLoading");
 
-    const cards = lenormandDeck.drawCards(3);
+    if (!lenormandDeck) { showScreen("welcome"); return; }
+      const cards = lenormandDeck.drawCards(3);
 
     try {
       const readingPromise = lenormandDeck.getReading(question);
@@ -1809,7 +1887,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.disabled = true;
     btn.textContent = "TA 在说...";
 
-    const cards = lenormandDeck.currentCards;
+    const cards = lenormandDeck ? lenormandDeck.currentCards : [];
     const question = document.getElementById("lenormand-question").value;
 
     try {
@@ -1842,11 +1920,11 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById("btn-lenormand-save").addEventListener("click", () => {
-    const cards = lenormandDeck.currentCards;
-    const reading = lenormandDeck.currentReading;
+    const cards = lenormandDeck ? lenormandDeck.currentCards : [];
+    const reading = lenormandDeck ? lenormandDeck.currentReading : '';
     const question = document.getElementById("lenormand-question").value;
 
-    });
+
 
     const isDark = currentTheme === "dark";
     const canvasW = 600;
@@ -1966,3 +2044,4 @@ document.addEventListener('DOMContentLoaded', () => {
     cimg2.src = "images/lenormand/" + encodeURIComponent(cards[1].image);
     cimg3.src = "images/lenormand/" + encodeURIComponent(cards[2].image);
   });
+});

@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (el) el.classList.add('active');
   }
 
-  const wordDeck = new WordCardEngine();
+  const wordDeck = typeof WordCardEngine !== 'undefined' ? new WordCardEngine() : { reset:function(){}, usedTexts:new Set(), drawCards:function(){return[];}, setCustomCards:function(){}, setCardMode:function(){}, cardMode:'default', commitCards:function(){}, drawCandidates:function(){return[];}, drawFromPoolNames:function(){return[];} };
   let busy = false;
   let chatMessages = [];
   let messageQueue = [];
@@ -54,7 +54,25 @@ document.addEventListener('DOMContentLoaded', () => {
     return avatarData[who] || getDefaultAvatar();
   }
 
+  // 读取指定 chatId 的 ta 头像（用于列表页）
+  function getChatTaAvatar(chatId) {
+    try {
+      var raw = localStorage.getItem('wc-chat-profile-' + chatId);
+      if (raw) { var o = JSON.parse(raw); if (o.ta) return o.ta; }
+    } catch(e) {}
+    return getDefaultAvatar();
+  }
+
+  function getChatTaNickname(chatId) {
+    try {
+      var raw = localStorage.getItem('wc-chat-profile-' + chatId);
+      if (raw) { var o = JSON.parse(raw); return o.taName || ''; }
+    } catch(e) {}
+    return '';
+  }
+
   function refreshHeaderAvatars() {
+    loadAvatarData();
     const meImg = document.getElementById('wc-avatar-me-img');
     const meDef = document.getElementById('wc-avatar-me-default');
     const taImg = document.getElementById('wc-avatar-ta-img');
@@ -62,6 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const meNameEl = document.getElementById('wc-name-me');
     const taNameEl = document.getElementById('wc-name-ta');
 
+    if (!meImg || !taImg) return;
     meImg.src = getAvatarSrc('me');
     meImg.classList.add('active');
     meDef.style.display = 'none';
@@ -172,10 +191,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  let currentChatId = null;
   loadAvatarData();
 
   // ─── 对话管理（微信风格） ───
-  let currentChatId = null;
   let savePending = false;
 
   // 自动保存到服务端（防抖 1.5s）
@@ -261,10 +280,10 @@ document.addEventListener('DOMContentLoaded', () => {
     item.dataset.id = chat.id;
     item.innerHTML = `
       <div class="wc-list-item-inner">
-        <div class="wc-list-item-avatar"><img src="${getAvatarSrc('ta')}" alt=""></div>
+        <div class="wc-list-item-avatar"><img src="${getChatTaAvatar(chat.id)}" alt=""></div>
         <div class="wc-list-item-body">
           <div class="wc-list-item-top">
-            <span class="wc-list-item-name">${chat.title || '新对话'}</span>
+            <span class="wc-list-item-name">${getChatTaNickname(chat.id) || chat.title || '新对话'}</span>
             <span class="wc-list-item-time">${formatTime(chat.updatedAt)}</span>
           </div>
           <div class="wc-list-item-preview">${chat.messageCount || 0} 条消息</div>
@@ -606,6 +625,7 @@ document.addEventListener('DOMContentLoaded', () => {
       stickerGroups = data.groups || [];
       renderStickerManager();
       renderStickerPicker();
+      renderFloatingStickers();
     } catch(e) { console.warn('load stickers failed:', e); }
   }
 
@@ -843,12 +863,40 @@ document.addEventListener('DOMContentLoaded', () => {
     messageQueue.push('[表情包]');
   }
 
+  // ── 浮动表情面板渲染 ──
+  function renderFloatingStickers() {
+    const panel = document.getElementById('wc-sticker-panel');
+    if (!panel) return;
+    panel.innerHTML = '';
+    const enabledGroups = stickerGroups.filter(g => g.enabled && g.stickers.length > 0);
+    if (enabledGroups.length === 0) {
+      panel.innerHTML = '<div class="wc-sticker-empty">还没有表情包<br><span style="font-size:0.65rem;opacity:0.5;">在卡组面板 → 表情包中添加</span></div>';
+      return;
+    }
+    for (const group of enabledGroups) {
+      for (const sticker of group.stickers) {
+        const img = document.createElement('img');
+        img.src = stickerUrl(sticker);
+        img.alt = '';
+        img.loading = 'lazy';
+        img.addEventListener('click', () => {
+          sendSticker(sticker);
+          toggleStickerPanel(false);
+        });
+        panel.appendChild(img);
+      }
+    }
+  }
+
   function toggleStickerPanel(show) {
     const panel = document.getElementById('wc-sticker-panel');
     if (show === undefined) show = !stickerPanelOpen;
     stickerPanelOpen = show;
     panel.style.display = show ? '' : 'none';
-    if (show && stickerGroups.length === 0) loadStickers();
+    if (show) {
+      if (stickerGroups.length === 0) loadStickers();
+      else renderFloatingStickers();
+    }
   }
 
   // 笑脸按钮 → 弹出选择器
@@ -907,7 +955,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ─── 导航 ───
   // 主页 → 对话列表（登录）或直接进聊天（未登录）
-  document.getElementById('btn-wordcard').addEventListener('click', () => {
+  var _el_btn_wordcard=document.getElementById('btn-wordcard'); if(_el_btn_wordcard) _el_btn_wordcard.addEventListener('click', () => {
     if (isLoggedIn()) {
       showScreenById('screen-wordcard-list');
       loadChatList();
@@ -936,7 +984,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // 聊天页：返回列表（保存后返回）
-  document.getElementById('btn-wordcard-back').addEventListener('click', async () => {
+  var _el_btn_wordcard_back=document.getElementById('btn-wordcard-back'); if(_el_btn_wordcard_back) _el_btn_wordcard_back.addEventListener('click', async () => {
     await saveChatNow();
     if (isLoggedIn()) {
       showScreenById('screen-wordcard-list');
@@ -947,7 +995,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // 清空当前对话
-  document.getElementById('btn-wordcard-reset').addEventListener('click', () => {
+  var _resetBtn = document.getElementById('btn-wordcard-reset'); if (_resetBtn) _resetBtn.addEventListener('click', () => {
     wordDeck.reset();
     chatMessages = [];
     localStorage.removeItem(STORAGE_KEY);
@@ -957,7 +1005,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ─── 保存聊天截图 ───
-  document.getElementById('btn-wc-save').addEventListener('click', () => {
+  var _el_btn_wc_save=document.getElementById('btn-wc-save'); if(_el_btn_wc_save) _el_btn_wc_save.addEventListener('click', () => {
     if (chatMessages.length === 0) return;
 
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -1112,8 +1160,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  document.getElementById('btn-wc-send').addEventListener('click', send);
-  document.getElementById('wc-input').addEventListener('keydown', (e) => {
+  var _el_btn_wc_send=document.getElementById('btn-wc-send'); if(_el_btn_wc_send) _el_btn_wc_send.addEventListener('click', send);
+  var _el_wc_input=document.getElementById('wc-input'); if(_el_wc_input) _el_wc_input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.isComposing) send();
   });
 
