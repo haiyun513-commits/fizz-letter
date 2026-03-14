@@ -18,7 +18,7 @@
   <meta property="og:url" content="https://fizzletter.cc">
   <meta property="og:type" content="website">
   <meta name="twitter:card" content="summary">
-  <link rel="stylesheet" href="css/style.css?v=0314m">
+  <link rel="stylesheet" href="css/style.css?v=0314n">
   <link rel="stylesheet" href="css/auth-theme.css?v=0309p">
 </head>
 <body>
@@ -425,6 +425,15 @@
                   <span>iMessage</span>
                 </div>
               </div>
+              <div class="wc-setting-section-title">色调微调</div>
+              <div id="wc-hue-options" class="wc-hue-options">
+                <div class="wc-hue-option selected" data-hue="0" style="background:linear-gradient(135deg,rgba(140,160,200,0.3),rgba(120,145,195,0.15));"></div>
+                <div class="wc-hue-option" data-hue="30" style="background:linear-gradient(135deg,rgba(200,170,120,0.3),rgba(195,160,100,0.15));"></div>
+                <div class="wc-hue-option" data-hue="180" style="background:linear-gradient(135deg,rgba(120,200,200,0.3),rgba(100,195,180,0.15));"></div>
+                <div class="wc-hue-option" data-hue="270" style="background:linear-gradient(135deg,rgba(180,140,200,0.3),rgba(160,120,195,0.15));"></div>
+                <div class="wc-hue-option" data-hue="330" style="background:linear-gradient(135deg,rgba(200,140,160,0.3),rgba(195,120,145,0.15));"></div>
+                <div class="wc-hue-option" data-hue="60" style="background:linear-gradient(135deg,rgba(180,200,120,0.3),rgba(160,195,100,0.15));"></div>
+              </div>
               <!-- Actions -->
               <div class="wc-setting-section-title" style="margin-top:12px;"></div>
               <div class="wc-setting-actions">
@@ -787,5 +796,68 @@
       <div class="card-zoom-keywords" id="card-zoom-keywords"></div>
     </div>
   </div>
+
+  <!-- 更新提醒弹窗 -->
+  <div id="update-modal" class="update-modal-overlay" style="display:none;">
+    <div class="update-modal">
+      <div class="update-modal-header">更新说明 v3.14</div>
+      <div class="update-modal-body">
+        <div class="update-section-title">字卡传讯</div>
+        <ul>
+          <li>全新设置面板：点击聊天页右上角，集成设置 / 卡组 / 表情包</li>
+          <li>5 种气泡样式：默认 / 甜粉 / 经典蓝 / 胶囊 / iMessage</li>
+          <li>自定义聊天背景：上传图片全屏铺满，顶部底部自动磨砂</li>
+          <li>未读消息红点提醒</li>
+          <li>保存聊天记录截图，表情包正确显示</li>
+          <li>清空对话增加二次确认</li>
+          <li>每个对话独立保存风格设置</li>
+        </ul>
+        <div class="update-section-title">界面体验</div>
+        <ul>
+          <li>聊天页分层磨砂玻璃效果</li>
+          <li>全屏无缝设计，状态栏颜色自动适配</li>
+        </ul>
+        <div class="update-section-title">账号与卡组</div>
+        <ul>
+          <li>个人设置：修改昵称、密码、头像</li>
+          <li>忘记密码邮箱找回</li>
+          <li>自定义卡组模式修复</li>
+        </ul>
+      </div>
+      <div class="update-modal-footer">
+        <button class="update-btn update-btn-dismiss" id="update-btn-ok">知道了</button>
+        <button class="update-btn update-btn-never" id="update-btn-never">不再提醒</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+// 更新提醒
+(function() {
+  var UPDATE_VER = "3.14";
+  var neverKey = "fizz-update-never";
+  var seenKey = "fizz-update-seen";
+  var never = localStorage.getItem(neverKey);
+  var seen = localStorage.getItem(seenKey);
+  if (never === UPDATE_VER || seen === UPDATE_VER) return;
+  var modal = document.getElementById("update-modal");
+  if (!modal) return;
+  setTimeout(function() { modal.style.display = "flex"; }, 600);
+  document.getElementById("update-btn-ok").addEventListener("click", function() {
+    localStorage.setItem(seenKey, UPDATE_VER);
+    modal.style.display = "none";
+  });
+  document.getElementById("update-btn-never").addEventListener("click", function() {
+    localStorage.setItem(neverKey, UPDATE_VER);
+    modal.style.display = "none";
+  });
+  modal.addEventListener("click", function(e) {
+    if (e.target === modal) {
+      localStorage.setItem(seenKey, UPDATE_VER);
+      modal.style.display = "none";
+    }
+  });
+})();
+</script>
 </body>
 </html>
