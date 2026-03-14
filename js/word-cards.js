@@ -1240,8 +1240,21 @@ class WordCardEngine {
 
   // ─── 7. 从指定池子名抽候选（AI 选池后调用）─────────────
   drawFromPoolNames(poolNames, n) {
+    // custom 模式：忽略系统池，只抽自定义卡
+    if (this.cardMode === 'custom' && this.customCards.length > 0) {
+      return { question: '', keywordIds: [], candidates: this._drawCustom(n, new Set()) };
+    }
+
     const candidates = [];
     const tempUsed = new Set();
+
+    // mixed 模式：系统池 + 自定义卡各一半
+    if (this.cardMode === 'mixed' && this.customCards.length > 0) {
+      const halfCustom = Math.ceil(n / 2);
+      const custom = this._drawCustom(halfCustom, new Set());
+      candidates.push(...custom);
+      n = n - custom.length;
+    }
 
     for (const name of poolNames) {
       const pool = _POOLS[name];
