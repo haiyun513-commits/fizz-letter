@@ -2996,27 +2996,37 @@ banter — 拌嘴（讨厌、你好烦……）`;
       // Build history context (last 10 messages)
       let historyCtx = "";
       if (history && history.length > 0) {
-        historyCtx = "\n\n对话上下文（从旧到新）：\n" + history.map(m => (m.type === "user" ? "对方：" : "你：") + m.text).join("\n");
+        historyCtx = "\n\n对话上下文（从旧到新，序号从0开始）：\n" + history.map((m, i) => "[" + i + "] " + (m.type === "user" ? "对方：" : "你：") + m.text).join("\n");
       }
-      const sysPrompt = "你是传讯字卡的筛选器。你扮演的是「回卡片的那个人」。对方说了一句话，系统抽了一些候选卡片，你要挑出最搭的卡来回应。\n\n重要：结合对话上下文选卡。如果对方在追问或接话，选能接上话题的卡，不要选跟当前话题无关的。\n\nNONE 规则（严格执行）：\n如果对方在追问具体的东西（比如「什么电影」「叫什么」「哪首歌」），而候选卡里没有任何一张能回答这个具体问题，你必须回复 NONE。不要用氛围卡或不相关的卡凑数。回复 NONE 比硬选一张不搭的卡更好。\n\n张数判断：\n- 问在哪/位置/天气 → 1张\n- 简单是否问题 → 1张\n- 日常问候/聊天 → 1-2张\n- 情感/想念/喜欢 → 2-3张\n- 复杂长问句 → 2-3张\n\n规则：\n- 只输出卡片文字，用逗号分隔，不要别的\n- 如果都不搭，只输出 NONE（这很重要，宁缺毋滥）\n- 优先选能直接回应问题的卡\n- 标了[氛围]的是场景/地点卡，一般不选\n- 不要选明显不搭的组合";
-      const userPrompt = (historyCtx ? historyCtx + "\n\n" : "") + "对方最新说：" + question + "\n\n候选卡片：\n" + cardList + "\n\n选出最搭的（只写卡片文字，逗号分隔）：";
+      const sysPrompt = "你是传讯字卡的筛选器。你扮演的是「回卡片的那个人」。对方说了一句话，系统抽了一些候选卡片，你要挑出最搭的卡来回应。\n\n重要：结合对话上下文选卡。如果对方在追问或接话，选能接上话题的卡，不要选跟当前话题无关的。\n\nNONE 规则（严格执行）：\n如果对方在追问具体的东西（比如「什么电影」「叫什么」「哪首歌」），而候选卡里没有任何一张能回答这个具体问题，你必须回复 NONE。不要用氛围卡或不相关的卡凑数。回复 NONE 比硬选一张不搭的卡更好。\n\n张数判断：\n- 问在哪/位置/天气 → 1张\n- 简单是否问题 → 1张\n- 日常问候/聊天 → 1-2张\n- 情感/想念/喜欢 → 2-3张\n- 复杂长问句 → 2-3张\n\n引用规则（像微信引用消息一样）：\n- 如果你选的卡片是在回应对话上下文中某条特定的消息（不是最新那条），在末尾加 [Q:序号]\n- 序号是对话上下文列表里的行号（从0开始）\n- 大多数时候不需要引用（直接回应最新消息时不加）\n- 只有当你的卡片明确是在回应上文中某条旧消息时才引用\n- 示例：对方先说了「好困」，又说了「要出门了」，你选的卡是「早点睡」→ 这是回应「好困」→ 加 [Q:对应序号]\n\n规则：\n- 先输出卡片文字（逗号分隔），如需引用在末尾加 [Q:序号]\n- 如果都不搭，只输出 NONE（这很重要，宁缺毋滥）\n- 优先选能直接回应问题的卡\n- 标了[氛围]的是场景/地点卡，一般不选\n- 不要选明显不搭的组合";
+      const userPrompt = (historyCtx ? historyCtx + "\n\n" : "") + "对方最新说：" + question + "\n\n候选卡片：\n" + cardList + "\n\n选出最搭的（卡片文字逗号分隔，如需引用旧消息在末尾加[Q:序号]）：";
       const messages = [
         { role: "system", content: sysPrompt },
         { role: "user", content: userPrompt }
       ];
       const result = await callWithFallback(messages, 100, "claude-haiku-4-5-20251001");
-      const raw = result.content.trim();
+      let raw = result.content.trim();
       // AI 认为候选都不搭
       if (raw === "NONE" || raw === "none") {
         sendJSON(res, 200, { cards: [], none: true });
         return;
       }
-      const selected = raw.split(/[,，]/).map(s => s.trim()).filter(s => texts.includes(s));
-      if (selected.length === 0) {
-        sendJSON(res, 200, { cards: texts.slice(0, 2) });
-      } else {
-        sendJSON(res, 200, { cards: selected.slice(0, 3) });
+      // 提取引用标记 [Q:n]
+      let quoteIndex = null;
+      const qMatch = raw.match(/\[Q:(\d+)\]\s*$/);
+      if (qMatch) {
+        quoteIndex = parseInt(qMatch[1], 10);
+        raw = raw.replace(/\s*\[Q:\d+\]\s*$/, '');
       }
+      const selected = raw.split(/[,，]/).map(s => s.trim()).filter(s => texts.includes(s));
+      const resp = {};
+      if (selected.length === 0) {
+        resp.cards = texts.slice(0, 2);
+      } else {
+        resp.cards = selected.slice(0, 3);
+      }
+      if (quoteIndex !== null) resp.quoteIndex = quoteIndex;
+      sendJSON(res, 200, resp);
     } catch (err) {
       console.error("Word card filter error:", err.message);
       sendJSON(res, 500, { error: err.message });

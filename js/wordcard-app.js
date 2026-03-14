@@ -1,3 +1,27 @@
+// ═══ 引用功能样式（行内注入，不碰 style.css）═══
+(function(){
+  var s = document.createElement("style");
+  s.textContent = `
+.wc-quote-bar{display:flex;align-items:stretch;gap:6px;margin-bottom:6px;padding:4px 8px;border-radius:4px;background:rgba(140,160,200,0.08);border-left:2px solid rgba(140,160,200,0.4);cursor:default;max-width:100%;overflow:hidden}
+.wc-quote-bar .wc-quote-name{font-size:0.7rem;color:var(--accent);white-space:nowrap;font-weight:500}
+.wc-quote-bar .wc-quote-text{font-size:0.72rem;color:var(--text-ghost);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
+[data-theme=dark] .wc-quote-bar{background:rgba(200,198,198,0.06);border-left-color:rgba(140,160,200,0.3)}
+.wc-quote-preview{display:flex;align-items:center;gap:8px;padding:6px 14px;border-top:1px solid var(--glass-border);background:rgba(140,160,200,0.04);font-size:0.75rem;color:var(--text-ghost);animation:wcQuoteIn 0.2s ease}
+.wc-quote-preview .wc-qp-line{width:2px;min-height:18px;background:var(--accent);border-radius:1px;flex-shrink:0}
+.wc-quote-preview .wc-qp-body{flex:1;overflow:hidden}
+.wc-quote-preview .wc-qp-name{font-size:0.68rem;color:var(--accent);font-weight:500}
+.wc-quote-preview .wc-qp-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wc-quote-preview .wc-qp-close{background:none;border:none;color:var(--text-ghost);font-size:1rem;cursor:pointer;padding:0 4px;opacity:0.6}
+@keyframes wcQuoteIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.wc-ctx-menu{position:absolute;z-index:200;background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.15);padding:4px 0;min-width:80px;animation:wcCtxIn 0.15s ease}
+.wc-ctx-menu button{display:block;width:100%;padding:8px 16px;background:none;border:none;color:var(--text-secondary);font-size:0.82rem;text-align:left;cursor:pointer}
+.wc-ctx-menu button:hover{background:rgba(140,160,200,0.1)}
+[data-theme=dark] .wc-ctx-menu{background:rgba(20,25,35,0.95);box-shadow:0 4px 20px rgba(0,0,0,0.4)}
+@keyframes wcCtxIn{from{opacity:0;transform:scale(0.9)}to{opacity:1;transform:scale(1)}}
+.wc-msg-row .wc-msg-user,.wc-msg-row .wc-msg-reply{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+`;
+  document.head.appendChild(s);
+})();
 // 字卡传讯 — 聊天界面（含自定义卡管理 + 头像系统）
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -353,7 +377,7 @@ document.addEventListener('DOMContentLoaded', () => {
           msgArea.appendChild(sep);
           lastAt = msg.at;
         }
-        appendMsgDom(msg.text, msg.type, msgArea, msg.msgType);
+        appendMsgDom(msg.text, msg.type, msgArea, msg.msgType, msg.quote);
       }
       scrollToBottom();
       // Apply visual settings from chat data
@@ -1000,7 +1024,7 @@ document.addEventListener('DOMContentLoaded', () => {
       loadChat();
       const msgArea = document.getElementById('wc-chat-messages');
       msgArea.innerHTML = '<div class="wc-system-msg">想对 TA 说什么？</div>';
-      for (const msg of chatMessages) appendMsgDom(msg.text, msg.type, msgArea, msg.msgType);
+      for (const msg of chatMessages) appendMsgDom(msg.text, msg.type, msgArea, msg.msgType, msg.quote);
       showScreenById('screen-wordcard-input');
       refreshHeaderAvatars();
       document.getElementById('wc-input').focus();
@@ -1599,24 +1623,28 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Enter' && !e.isComposing) send();
   });
 
+  let quoteQueue = [];
+
   function send() {
     if (busy) return;
     var input = document.getElementById('wc-input');
     var text = input.value.trim();
 
     if (text) {
-      // 有文字 → 显示消息，加入队列，AI不回应
       messageQueue.push(text);
+      const q = pendingQuote ? { ...pendingQuote } : null;
+      quoteQueue.push(q);
       input.value = '';
-      addMsg(text, 'user');
+      addMsg(text, 'user', undefined, q);
+      clearQuote();
       input.focus();
       return;
     }
 
-    // 空白发送 → 合并队列，触发AI翻卡
     if (messageQueue.length === 0) return;
     var combined = messageQueue.join('\n');
     messageQueue = [];
+    quoteQueue = [];
     sendText(combined);
   }
 
@@ -1628,11 +1656,9 @@ document.addEventListener('DOMContentLoaded', () => {
     typing.style.display = 'flex';
     scrollToBottom();
 
-    // ── 先做本地关键词匹配（作为 AI 参考）──
     const localResult = wordDeck.drawCandidates(text, 6);
     const keywordHint = localResult.keywordIds;
 
-    // ── AI 选池子（每次都调，关键词匹配结果作为 hint）──
     let result;
     try {
       const poolResp = await fetch('/api/word-cards/select-pools', {
@@ -1653,7 +1679,6 @@ document.addEventListener('DOMContentLoaded', () => {
       result = localResult;
     }
 
-    // 卡片全用完时，清空已用记录重试
     if (result.candidates.length === 0) {
       wordDeck.usedTexts.clear();
       result = localResult.candidates.length > 0 ? localResult : wordDeck.drawCandidates(text, 6);
@@ -1661,6 +1686,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const candidateObjs = result.candidates.map(c => ({ text: c.text, source: c.source }));
     let finalCards;
+    let aiQuote = null;
 
     if (candidateObjs.length === 0) {
       typing.style.display = 'none';
@@ -1677,13 +1703,21 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       const data = await resp.json();
       if (data.none) {
-        // AI 认为候选都不搭 → 显示兜底元卡
         const meta = typeof CARD_LIMIT_META !== 'undefined' ? CARD_LIMIT_META : ["字卡里没有我想说的"];
         finalCards = [meta[Math.floor(Math.random() * meta.length)]];
       } else if (data.cards && data.cards.length > 0) {
         finalCards = data.cards;
       } else {
         finalCards = candidateObjs.map(c => c.text).slice(0, 2);
+      }
+      if (data.quoteIndex != null) {
+        const recentMsgs = chatMessages.slice(-10);
+        const qi = data.quoteIndex;
+        if (qi >= 0 && qi < recentMsgs.length) {
+          const qm = recentMsgs[qi];
+          aiQuote = { text: qm.text, type: qm.type };
+          if (qm.msgType) aiQuote.msgType = qm.msgType;
+        }
       }
     } catch (err) {
       finalCards = candidateObjs.map(c => c.text).slice(0, 2);
@@ -1700,9 +1734,8 @@ document.addEventListener('DOMContentLoaded', () => {
     finalCards.forEach((cardText, i) => {
       setTimeout(() => {
         if (i === finalCards.length - 1) typing.style.display = 'none';
-        addMsg(cardText, 'reply');
+        addMsg(cardText, 'reply', undefined, i === 0 ? aiQuote : null);
         if (i === finalCards.length - 1) {
-          // AI 有概率发表情包
           maybeAiSticker(delay);
           busy = false;
           document.getElementById('wc-input').focus();
@@ -1725,7 +1758,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 2000 + Math.random() * 3000);
   }
 
-  function appendMsgDom(text, type, container, msgType) {
+  function appendMsgDom(text, type, container, msgType, quote) {
     const row = document.createElement('div');
     row.className = 'wc-msg-row' + (type === 'user' ? ' is-user' : '');
     const avatar = document.createElement('div');
@@ -1733,6 +1766,19 @@ document.addEventListener('DOMContentLoaded', () => {
     avatar.innerHTML = buildMsgAvatarHtml(type);
     const bubble = document.createElement('div');
     bubble.className = type === 'user' ? 'wc-msg-user' : 'wc-msg-reply';
+    if (quote && quote.text) {
+      const qBar = document.createElement('div');
+      qBar.className = 'wc-quote-bar';
+      const qName = document.createElement('span');
+      qName.className = 'wc-quote-name';
+      qName.textContent = quote.type === 'user' ? getMyNickname() : (getTaNickname() || 'TA');
+      const qText = document.createElement('span');
+      qText.className = 'wc-quote-text';
+      qText.textContent = quote.msgType === 'sticker' ? '[表情包]' : quote.text;
+      qBar.appendChild(qName);
+      qBar.appendChild(qText);
+      bubble.appendChild(qBar);
+    }
     if (msgType === 'sticker') {
       bubble.classList.add('wc-msg-sticker');
       const img = document.createElement('img');
@@ -1741,7 +1787,9 @@ document.addEventListener('DOMContentLoaded', () => {
       img.className = 'wc-sticker-msg-img';
       bubble.appendChild(img);
     } else {
-      bubble.textContent = text;
+      const span = document.createElement('span');
+      span.textContent = text;
+      bubble.appendChild(span);
     }
     row.appendChild(avatar);
     row.appendChild(bubble);
@@ -1749,20 +1797,170 @@ document.addEventListener('DOMContentLoaded', () => {
     return row;
   }
 
-  function addMsg(text, type, msgType) {
+  function addMsg(text, type, msgType, quote) {
     const msgArea = document.getElementById('wc-chat-messages');
-    appendMsgDom(text, type, msgArea, msgType);
+    appendMsgDom(text, type, msgArea, msgType, quote);
     const msgObj = { text, type };
     if (msgType) msgObj.msgType = msgType;
+    if (quote) msgObj.quote = quote;
     chatMessages.push(msgObj);
     scrollToBottom();
-    saveChat(); // 每条消息自动保存
+    saveChat();
   }
 
   function scrollToBottom() {
     const msgArea = document.getElementById('wc-chat-messages');
     requestAnimationFrame(() => { msgArea.scrollTop = msgArea.scrollHeight; });
   }
+
+  // ═══ 消息引用（长按菜单 + 预览条） ═══
+  let pendingQuote = null;
+
+  function setQuote(msgObj) {
+    pendingQuote = { text: msgObj.text, type: msgObj.type };
+    if (msgObj.msgType) pendingQuote.msgType = msgObj.msgType;
+    showQuotePreview();
+    document.getElementById('wc-input').focus();
+  }
+
+  function clearQuote() {
+    pendingQuote = null;
+    const el = document.getElementById('wc-quote-preview');
+    if (el) el.remove();
+  }
+
+  function showQuotePreview() {
+    let el = document.getElementById('wc-quote-preview');
+    if (el) el.remove();
+    el = document.createElement('div');
+    el.className = 'wc-quote-preview';
+    el.id = 'wc-quote-preview';
+    const line = document.createElement('div');
+    line.className = 'wc-qp-line';
+    const body = document.createElement('div');
+    body.className = 'wc-qp-body';
+    const name = document.createElement('div');
+    name.className = 'wc-qp-name';
+    name.textContent = pendingQuote.type === 'user' ? getMyNickname() : (getTaNickname() || 'TA');
+    const txt = document.createElement('div');
+    txt.className = 'wc-qp-text';
+    txt.textContent = pendingQuote.msgType === 'sticker' ? '[表情包]' : pendingQuote.text;
+    body.appendChild(name);
+    body.appendChild(txt);
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'wc-qp-close';
+    closeBtn.textContent = '×';
+    closeBtn.addEventListener('click', clearQuote);
+    el.appendChild(line);
+    el.appendChild(body);
+    el.appendChild(closeBtn);
+    const inputArea = document.querySelector('.wc-chat-input-area');
+    inputArea.parentNode.insertBefore(el, inputArea);
+  }
+
+  let ctxMenu = null;
+  function removeCtxMenu() { if (ctxMenu) { ctxMenu.remove(); ctxMenu = null; } }
+  document.addEventListener('click', removeCtxMenu);
+  document.addEventListener('scroll', removeCtxMenu, true);
+
+  function showCtxMenu(x, y, msgIdx) {
+    removeCtxMenu();
+    const msg = chatMessages[msgIdx];
+    if (!msg) return;
+    ctxMenu = document.createElement('div');
+    ctxMenu.className = 'wc-ctx-menu';
+    const isUser = msg.type === 'user';
+    const isSticker = msg.msgType === 'sticker';
+    const actions = [];
+
+    // 复制（非表情包）
+    if (!isSticker) {
+      actions.push({ label: '复制', fn: () => {
+        navigator.clipboard.writeText(msg.text).catch(() => {});
+      }});
+    }
+    // 引用
+    actions.push({ label: '引用', fn: () => setQuote(msg) });
+    // 编辑（仅用户文字消息）
+    if (isUser && !isSticker) {
+      actions.push({ label: '编辑', fn: () => editMsg(msgIdx) });
+    }
+    // 删除
+    actions.push({ label: '删除', fn: () => deleteMsg(msgIdx) });
+
+    actions.forEach(a => {
+      const btn = document.createElement('button');
+      btn.textContent = a.label;
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        a.fn();
+        removeCtxMenu();
+      });
+      ctxMenu.appendChild(btn);
+    });
+
+    document.body.appendChild(ctxMenu);
+    const mw = ctxMenu.offsetWidth, mh = ctxMenu.offsetHeight;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    ctxMenu.style.left = Math.min(x, vw - mw - 8) + 'px';
+    ctxMenu.style.top = Math.min(y, vh - mh - 8) + 'px';
+  }
+
+  function editMsg(idx) {
+    const msg = chatMessages[idx];
+    if (!msg || msg.type !== 'user' || msg.msgType === 'sticker') return;
+    const newText = prompt('编辑消息', msg.text);
+    if (newText === null || newText.trim() === '' || newText.trim() === msg.text) return;
+    msg.text = newText.trim();
+    // 更新 DOM
+    const rows = chatMsgArea.querySelectorAll('.wc-msg-row');
+    if (rows[idx]) {
+      const bubble = rows[idx].querySelector('.wc-msg-user');
+      if (bubble) {
+        const span = bubble.querySelector('span');
+        if (span) span.textContent = msg.text;
+        else bubble.textContent = msg.text;
+      }
+    }
+    saveChat();
+  }
+
+  function deleteMsg(idx) {
+    chatMessages.splice(idx, 1);
+    const rows = chatMsgArea.querySelectorAll('.wc-msg-row');
+    if (rows[idx]) rows[idx].remove();
+    saveChat();
+  }
+
+  const chatMsgArea = document.getElementById('wc-chat-messages');
+  let longPressTimer = null;
+  let longPressTriggered = false;
+
+  chatMsgArea.addEventListener('touchstart', (e) => {
+    const row = e.target.closest('.wc-msg-row');
+    if (!row) return;
+    longPressTriggered = false;
+    const touch = e.touches[0];
+    longPressTimer = setTimeout(() => {
+      longPressTriggered = true;
+      const rows = Array.from(chatMsgArea.querySelectorAll('.wc-msg-row'));
+      const idx = rows.indexOf(row);
+      if (idx >= 0) showCtxMenu(touch.clientX, touch.clientY, idx);
+    }, 500);
+  }, { passive: true });
+  chatMsgArea.addEventListener('touchmove', () => { clearTimeout(longPressTimer); }, { passive: true });
+  chatMsgArea.addEventListener('touchend', (e) => {
+    clearTimeout(longPressTimer);
+    if (longPressTriggered) { e.preventDefault(); longPressTriggered = false; }
+  });
+  chatMsgArea.addEventListener('contextmenu', (e) => {
+    const row = e.target.closest('.wc-msg-row');
+    if (!row) return;
+    e.preventDefault();
+    const rows = Array.from(chatMsgArea.querySelectorAll('.wc-msg-row'));
+    const idx = rows.indexOf(row);
+    if (idx >= 0) showCtxMenu(e.clientX, e.clientY, idx);
+  });
 
   // ===== 卡牌放大（雷诺曼） =====
   const zoomOverlay = document.getElementById('card-zoom-overlay');
