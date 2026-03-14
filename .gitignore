@@ -8,3 +8,4 @@ stats.json
 *.bak2
 *.bak3
 *.bak*
+data/

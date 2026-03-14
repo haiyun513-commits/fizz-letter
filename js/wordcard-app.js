@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 容错：word-cards.js 可能未加载完
   if (typeof WordCardEngine === "undefined") { console.warn("WordCardEngine not loaded, using fallback"); window.WordCardEngine = class { constructor(){ this.history=[]; this.usedTexts=new Set(); } draw(){ return null; } reset(){ this.history=[]; this.usedTexts.clear(); } setCustomCards(){} setCardMode(){} getCardMode(){ return "default"; } }; }
-  const wordDeck = new WordCardEngine();
+  const wordDeck = typeof WordCardEngine !== 'undefined' ? new WordCardEngine() : { reset:function(){}, usedTexts:new Set(), drawCards:function(){return[];}, setCustomCards:function(){}, setCardMode:function(){}, cardMode:'default', commitCards:function(){}, drawCandidates:function(){return[];}, drawFromPoolNames:function(){return[];} };
   let busy = false;
   let chatMessages = [];
   let messageQueue = [];
@@ -56,7 +56,25 @@ document.addEventListener('DOMContentLoaded', () => {
     return avatarData[who] || getDefaultAvatar();
   }
 
+  // 读取指定 chatId 的 ta 头像（用于列表页）
+  function getChatTaAvatar(chatId) {
+    try {
+      var raw = localStorage.getItem('wc-chat-profile-' + chatId);
+      if (raw) { var o = JSON.parse(raw); if (o.ta) return o.ta; }
+    } catch(e) {}
+    return getDefaultAvatar();
+  }
+
+  function getChatTaNickname(chatId) {
+    try {
+      var raw = localStorage.getItem('wc-chat-profile-' + chatId);
+      if (raw) { var o = JSON.parse(raw); return o.taName || ''; }
+    } catch(e) {}
+    return '';
+  }
+
   function refreshHeaderAvatars() {
+    loadAvatarData();
     const meImg = document.getElementById('wc-avatar-me-img');
     const meDef = document.getElementById('wc-avatar-me-default');
     const taImg = document.getElementById('wc-avatar-ta-img');
@@ -174,10 +192,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  let currentChatId = null;
   loadAvatarData();
 
   // ─── 对话管理（微信风格） ───
-  let currentChatId = null;
   let savePending = false;
 
   // 自动保存到服务端（防抖 1.5s）
@@ -267,10 +285,10 @@ document.addEventListener('DOMContentLoaded', () => {
     item.dataset.id = chat.id;
     item.innerHTML = `
       <div class="wc-list-item-inner">
-        <div class="wc-list-item-avatar"><img src="${getAvatarSrc('ta')}" alt=""></div>
+        <div class="wc-list-item-avatar"><img src="${getChatTaAvatar(chat.id)}" alt=""></div>
         <div class="wc-list-item-body">
           <div class="wc-list-item-top">
-            <span class="wc-list-item-name">${chat.title || '新对话'}</span>
+            <span class="wc-list-item-name">${getChatTaNickname(chat.id) || chat.title || '新对话'}</span>
             <span class="wc-list-item-time">${formatTime(chat.updatedAt)}</span>
           </div>
           <div class="wc-list-item-bottom"><span class="wc-list-item-preview">${chat.messageCount || 0} 条消息</span>${chat.unreadCount > 0 ? '<span class="wc-unread-badge">' + chat.unreadCount + '</span>' : ''}</div>
@@ -400,7 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ─── 自定义卡管理 ───
   const manageBtn = document.getElementById('btn-wc-manage');
-  const cardPanel = document.getElementById('wc-card-panel');
+  // cardPanel merged into settings panel
   const cardListEl = document.getElementById('wc-card-list');
   const cardCountEl = document.getElementById('wc-card-count');
   let userCards = [];
@@ -440,19 +458,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   initCustomCards();
 
-  // 打开/关闭面板
-  if (manageBtn) {
-    manageBtn.addEventListener('click', () => {
-      if (cardPanel) cardPanel.style.display = 'flex';
-    });
-  }
-
-  const closeBtn = document.getElementById('btn-wc-panel-close');
-  if (closeBtn) {
-    closeBtn.addEventListener('click', () => {
-      if (cardPanel) cardPanel.style.display = 'none';
-    });
-  }
+  // 打开/关闭面板（统一面板）
+  // manageBtn removed from HTML, card panel merged into settings panel
 
   // 模式切换 tabs
   document.querySelectorAll('.wc-mode-tab').forEach(tab => {
@@ -595,16 +602,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (cardCountEl) cardCountEl.textContent = userCards.length + ' 张自定义卡';
   }
 
-  // ─── 顶级 Tab 切换（卡组 / 表情包） ───
-  document.querySelectorAll('.wc-top-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.wc-top-tab').forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      const panel = tab.dataset.panel;
-      document.getElementById('wc-tab-cards').style.display = panel === 'cards' ? '' : 'none';
-      document.getElementById('wc-tab-stickers').style.display = panel === 'stickers' ? '' : 'none';
-      if (panel === 'stickers' && stickerGroups.length === 0) loadStickers();
+  // ─── 顶级 Tab 切换（设置 / 卡组 / 表情包） ───
+  function switchSettingsTab(tabName) {
+    document.querySelectorAll('.wc-top-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.wc-top-tab').forEach(t => { if (t.dataset.panel === tabName) t.classList.add('active'); });
+    var allTabs = ['settings', 'cards', 'stickers'];
+    allTabs.forEach(function(name) {
+      var el = document.getElementById('wc-tab-' + name);
+      if (el) el.style.display = name === tabName ? '' : 'none';
     });
+    if (tabName === 'stickers' && stickerGroups.length === 0) loadStickers();
+  }
+  document.querySelectorAll('.wc-top-tab').forEach(tab => {
+    tab.addEventListener('click', () => { switchSettingsTab(tab.dataset.panel); });
   });
 
   // ─── 表情包系统（分组） ───
@@ -638,6 +648,7 @@ document.addEventListener('DOMContentLoaded', () => {
       stickerGroups = data.groups || [];
       renderStickerManager();
       renderStickerPicker();
+      renderFloatingStickers();
     } catch(e) { console.warn('load stickers failed:', e); }
   }
 
@@ -875,12 +886,40 @@ document.addEventListener('DOMContentLoaded', () => {
     messageQueue.push('[表情包]');
   }
 
+  // ── 浮动表情面板渲染 ──
+  function renderFloatingStickers() {
+    const panel = document.getElementById('wc-sticker-panel');
+    if (!panel) return;
+    panel.innerHTML = '';
+    const enabledGroups = stickerGroups.filter(g => g.enabled && g.stickers.length > 0);
+    if (enabledGroups.length === 0) {
+      panel.innerHTML = '<div class="wc-sticker-empty">还没有表情包<br><span style="font-size:0.65rem;opacity:0.5;">在卡组面板 → 表情包中添加</span></div>';
+      return;
+    }
+    for (const group of enabledGroups) {
+      for (const sticker of group.stickers) {
+        const img = document.createElement('img');
+        img.src = stickerUrl(sticker);
+        img.alt = '';
+        img.loading = 'lazy';
+        img.addEventListener('click', () => {
+          sendSticker(sticker);
+          toggleStickerPanel(false);
+        });
+        panel.appendChild(img);
+      }
+    }
+  }
+
   function toggleStickerPanel(show) {
     const panel = document.getElementById('wc-sticker-panel');
     if (show === undefined) show = !stickerPanelOpen;
     stickerPanelOpen = show;
     panel.style.display = show ? '' : 'none';
-    if (show && stickerGroups.length === 0) loadStickers();
+    if (show) {
+      if (stickerGroups.length === 0) loadStickers();
+      else renderFloatingStickers();
+    }
   }
 
   // 笑脸按钮 → 弹出选择器
@@ -979,7 +1018,9 @@ document.addEventListener('DOMContentLoaded', () => {
     chatSettingsBtn.addEventListener('click', () => {
       if (chatSettingsPanel.style.display === 'none') {
         chatSettingsPanel.style.display = 'flex';
+        switchSettingsTab('settings');
         loadChatSettings();
+        loadProfileSection();
       } else {
         chatSettingsPanel.style.display = 'none';
       }
@@ -990,6 +1031,70 @@ document.addEventListener('DOMContentLoaded', () => {
   if (_settingsPanelClose) _settingsPanelClose.addEventListener('click', () => {
     chatSettingsPanel.style.display = 'none';
   });
+
+  // ─── TA Profile 编辑（per-chat） ───
+  function loadProfileSection() {
+    var img = document.getElementById('wc-profile-avatar-img');
+    var placeholder = document.querySelector('.wc-profile-avatar-placeholder');
+    var nicknameInput = document.getElementById('wc-profile-nickname');
+    if (!img) return;
+    // Load current TA avatar/nickname for this chat
+    loadAvatarData();
+    if (avatarData.ta) {
+      img.src = avatarData.ta;
+      img.style.display = '';
+      if (placeholder) placeholder.style.display = 'none';
+    } else {
+      img.style.display = 'none';
+      if (placeholder) placeholder.style.display = '';
+    }
+    if (nicknameInput) nicknameInput.value = avatarData.taName || '';
+  }
+
+  // Profile avatar upload
+  var profileAvatarFile = document.getElementById('wc-profile-avatar-file');
+  if (profileAvatarFile) profileAvatarFile.addEventListener('change', function(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function() {
+      var img = new Image();
+      img.onload = function() {
+        var size = 200;
+        var canvas = document.createElement('canvas');
+        canvas.width = size; canvas.height = size;
+        var ctx = canvas.getContext('2d');
+        var sx = 0, sy = 0, sw = img.width, sh = img.height;
+        if (sw > sh) { sx = (sw - sh) / 2; sw = sh; }
+        else { sy = (sh - sw) / 2; sh = sw; }
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, size, size);
+        var dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        avatarData.ta = dataUrl;
+        saveAvatarData();
+        var previewImg = document.getElementById('wc-profile-avatar-img');
+        var placeholder = document.querySelector('.wc-profile-avatar-placeholder');
+        if (previewImg) { previewImg.src = dataUrl; previewImg.style.display = ''; }
+        if (placeholder) placeholder.style.display = 'none';
+        refreshHeaderAvatars();
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // Profile nickname input
+  var profileNickname = document.getElementById('wc-profile-nickname');
+  if (profileNickname) {
+    var _nickTimer = null;
+    profileNickname.addEventListener('input', function() {
+      clearTimeout(_nickTimer);
+      _nickTimer = setTimeout(function() {
+        avatarData.taName = profileNickname.value.trim();
+        saveAvatarData();
+        refreshHeaderAvatars();
+      }, 500);
+    });
+  }
 
   async function loadChatSettings() {
     if (!isLoggedIn() || !currentChatId) return;
@@ -1008,6 +1113,10 @@ document.addEventListener('DOMContentLoaded', () => {
       };
       updateSettingsPanelUI(currentChatSettings);
       applyChatVisualSettings(currentChatSettings);
+      // Restore bubble style
+      if (currentChatSettings.bubbleStyle && currentChatSettings.bubbleStyle !== 'default') {
+        applyBubbleStyle(currentChatSettings.bubbleStyle);
+      }
     } catch(e) {}
   }
 
@@ -1075,11 +1184,11 @@ document.addEventListener('DOMContentLoaded', () => {
     var target = container || msgArea;
     var hasBg = false;
     if (settings.bgImage) {
-      target.style.backgroundImage = 'url(' + settings.bgImage + ')';
-      target.style.backgroundSize = 'cover';
-      target.style.backgroundPosition = 'center';
-      target.style.backgroundRepeat = 'no-repeat';
-      target.style.backgroundColor = '';
+      target.style.setProperty('background-image', 'url(' + settings.bgImage + ')', 'important');
+      target.style.setProperty('background-size', 'cover', 'important');
+      target.style.setProperty('background-position', 'center', 'important');
+      target.style.setProperty('background-repeat', 'no-repeat', 'important');
+      target.style.setProperty('background-color', 'transparent', 'important');
       hasBg = true;
     } else if (settings.bgPreset && settings.bgPreset !== 'none' && BG_PRESETS[settings.bgPreset]) {
       var bg = BG_PRESETS[settings.bgPreset];
@@ -1095,11 +1204,11 @@ document.addEventListener('DOMContentLoaded', () => {
       target.style.backgroundRepeat = '';
       hasBg = true;
     } else {
-      target.style.backgroundImage = '';
-      target.style.backgroundColor = '';
-      target.style.backgroundSize = '';
-      target.style.backgroundPosition = '';
-      target.style.backgroundRepeat = '';
+      target.style.removeProperty('background-image');
+      target.style.removeProperty('background-color');
+      target.style.removeProperty('background-size');
+      target.style.removeProperty('background-position');
+      target.style.removeProperty('background-repeat');
     }
     // 有背景时 header/input 变毛玻璃
     if (container) {
@@ -1107,9 +1216,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Bubble theme — add class to messages container
-    msgArea.classList.remove('bubble-theme-sweetpink', 'bubble-theme-darknight', 'bubble-theme-classicblue', 'bubble-theme-tail', 'bubble-theme-outline');
+    msgArea.classList.remove('bubble-theme-sweetpink', 'bubble-theme-darknight', 'bubble-theme-classicblue', 'bubble-theme-capsule', 'bubble-theme-imessage', 'bubble-theme-dark', 'bubble-theme-pink', 'bubble-theme-minimal');
     if (settings.bubbleTheme && settings.bubbleTheme !== 'default') {
       msgArea.classList.add('bubble-theme-' + settings.bubbleTheme);
+    }
+    // 主题也加到 container 上（控制 header/input 样式）
+    if (container) {
+      container.classList.remove('chat-theme-dark', 'chat-theme-pink', 'chat-theme-minimal');
+      if (settings.bubbleTheme && settings.bubbleTheme !== 'default') {
+        container.classList.add('chat-theme-' + settings.bubbleTheme);
+      }
+      // 动态更新状态栏 + body 背景颜色
+      var themeColors = { dark: '#0b0d11', pink: '#f5e8ed', minimal: '#fafafa', default: '#f0f2f5' };
+      var tc = themeColors[settings.bubbleTheme] || themeColors['default'];
+      var metaTC = document.querySelector('meta[name="theme-color"]');
+      if (metaTC) metaTC.content = tc;
+      document.documentElement.style.background = tc;
+      document.body.style.background = tc;
     }
 
     // 色调 — hue-rotate on bubbles
@@ -1123,7 +1246,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateSettingsPanelUI(settings) {
     // Background
-    document.querySelectorAll('#wc-bg-options .wc-bg-option').forEach(function(o) { o.classList.remove('selected'); });
+    document.querySelectorAll('#wc-bg-options .wc-bg-card, #wc-bg-options .wc-bg-option').forEach(function(o) { o.classList.remove('selected'); });
     var bgKey = settings.bgImage ? 'custom' : (settings.bgPreset || 'none');
     if (bgKey === 'custom') {
       // highlight upload button
@@ -1137,7 +1260,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Bubble style
     document.querySelectorAll('#wc-theme-options .wc-theme-option').forEach(function(o) { o.classList.remove('selected'); });
     var styleKey = settings.bubbleStyle || 'round';
-    var styleEl = document.querySelector('#wc-bubble-styles .wc-bubble-style-option[data-style="' + styleKey + '"]');
+    var styleEl = document.querySelector('#wc-theme-options .wc-theme-option[data-style="' + styleKey + '"]');
     if (styleEl) styleEl.classList.add('selected');
 
     // My color
@@ -1166,7 +1289,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Background option clicks
-  document.querySelectorAll('#wc-bg-options .wc-bg-option:not(.wc-bg-upload)').forEach(function(opt) {
+  document.querySelectorAll('#wc-bg-options .wc-bg-card:not(.wc-bg-upload), #wc-bg-options .wc-bg-option:not(.wc-bg-upload)').forEach(function(opt) {
     opt.addEventListener('click', function() {
       document.querySelectorAll('#wc-bg-options .wc-bg-option').forEach(function(o) { o.classList.remove('selected'); });
       opt.classList.add('selected');
@@ -1182,21 +1305,33 @@ document.addEventListener('DOMContentLoaded', () => {
   if (bgUploadInput) bgUploadInput.addEventListener('change', function(e) {
     var file = e.target.files[0];
     if (!file) return;
-    var reader = new FileReader();
-    reader.onload = function() {
-      var dataUrl = reader.result;
-      if (dataUrl.length > 700000) {
-        alert('图片太大，请选择小于 500KB 的图片');
-        return;
+    if (file.size > 20 * 1024 * 1024) { alert('图片不能超过 20MB'); return; }
+    var img = new Image();
+    img.onload = function() {
+      var maxDim = 1200;
+      var w = img.width, h = img.height;
+      if (w > maxDim || h > maxDim) {
+        if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+        else { w = Math.round(w * maxDim / h); h = maxDim; }
+      }
+      var canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      var quality = 0.8;
+      var dataUrl = canvas.toDataURL('image/jpeg', quality);
+      while (dataUrl.length > 800000 && quality > 0.1) {
+        quality -= 0.1;
+        dataUrl = canvas.toDataURL('image/jpeg', quality);
       }
       document.querySelectorAll('#wc-bg-options .wc-bg-option').forEach(function(o) { o.classList.remove('selected'); });
-      document.querySelector('.wc-bg-upload').classList.add('selected');
+      var _upEl = document.querySelector('.wc-bg-upload'); if(_upEl) _upEl.classList.add('selected');
       currentChatSettings.bgPreset = 'custom';
       currentChatSettings.bgImage = dataUrl;
       saveChatVisualSetting({ bgPreset: 'custom', bgImage: dataUrl });
       applyChatVisualSettings(currentChatSettings);
     };
-    reader.readAsDataURL(file);
+    img.src = URL.createObjectURL(file);
   });
 
   // Bubble theme clicks
@@ -1206,6 +1341,29 @@ document.addEventListener('DOMContentLoaded', () => {
       opt.classList.add('selected');
       currentChatSettings.bubbleTheme = opt.dataset.theme;
       saveChatVisualSetting({ bubbleTheme: opt.dataset.theme });
+      applyChatVisualSettings(currentChatSettings);
+    });
+  });
+
+  // Bubble style clicks (separate from theme)
+  document.querySelectorAll('#wc-bubble-options .wc-theme-option').forEach(function(opt) {
+    opt.addEventListener('click', function() {
+      document.querySelectorAll('#wc-bubble-options .wc-theme-option').forEach(function(o) { o.classList.remove('selected'); });
+      opt.classList.add('selected');
+      currentChatSettings.bubbleStyle = opt.dataset.bubble;
+      saveChatVisualSetting({ bubbleStyle: opt.dataset.bubble });
+      applyBubbleStyle(opt.dataset.bubble);
+    });
+  });
+
+  function applyBubbleStyle(style) {
+    var msgArea = document.getElementById('wc-chat-messages');
+    if (!msgArea) return;
+    msgArea.classList.remove('bubble-theme-sweetpink', 'bubble-theme-darknight', 'bubble-theme-classicblue', 'bubble-theme-capsule', 'bubble-theme-imessage');
+    if (style && style !== 'default') {
+      msgArea.classList.add('bubble-theme-' + style);
+    }
+  }
 
   // Hue clicks
   document.querySelectorAll('#wc-hue-options .wc-hue-option').forEach(function(opt) {
@@ -1214,9 +1372,6 @@ document.addEventListener('DOMContentLoaded', () => {
       opt.classList.add('selected');
       currentChatSettings.hueRotate = opt.dataset.hue;
       saveChatVisualSetting({ hueRotate: parseInt(opt.dataset.hue) });
-      applyChatVisualSettings(currentChatSettings);
-    });
-  });
       applyChatVisualSettings(currentChatSettings);
     });
   });
@@ -1260,6 +1415,24 @@ document.addEventListener('DOMContentLoaded', () => {
   function saveScreenshot() {
     if (chatMessages.length === 0) return;
 
+    // 预加载所有表情包图片
+    var stickerMsgs = chatMessages.filter(m => m.msgType === 'sticker');
+    var stickerImages = {};
+    var loadPromises = stickerMsgs.map(function(m) {
+      return new Promise(function(resolve) {
+        var img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = function() { stickerImages[m.text] = img; resolve(); };
+        img.onerror = function() { resolve(); };
+        img.src = m.text;
+      });
+    });
+
+    Promise.all(loadPromises).then(function() { _doScreenshot(stickerImages); });
+  }
+
+  function _doScreenshot(stickerImages) {
+
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     const canvasW = 600;
     const dpr = 3;
@@ -1292,13 +1465,20 @@ document.addEventListener('DOMContentLoaded', () => {
       return lines.length || 1;
     }
 
+    const stickerSize = 120;
     let totalH = padY;
     const msgLayouts = [];
     for (const msg of chatMessages) {
-      const lineCount = wrapText(tmpCtx, msg.text, maxTextW);
-      const bubbleH = bubblePadY * 2 + lineCount * lineH;
-      msgLayouts.push({ ...msg, lineCount, bubbleH });
-      totalH += bubbleH + gap;
+      if (msg.msgType === 'sticker') {
+        const bubbleH = stickerSize + 8;
+        msgLayouts.push({ ...msg, lineCount: 0, bubbleH, isSticker: true });
+        totalH += bubbleH + gap;
+      } else {
+        const lineCount = wrapText(tmpCtx, msg.text, maxTextW);
+        const bubbleH = bubblePadY * 2 + lineCount * lineH;
+        msgLayouts.push({ ...msg, lineCount, bubbleH });
+        totalH += bubbleH + gap;
+      }
     }
     totalH += padY - gap;
     const canvasH = Math.max(totalH, 400);
@@ -1351,6 +1531,20 @@ document.addEventListener('DOMContentLoaded', () => {
       const r = 18;
       const sr = 4;
 
+      // 表情包不画气泡
+      if (msg.isSticker) {
+        if (stickerImages[msg.text]) {
+          var stkImg = stickerImages[msg.text];
+          var drawW = stickerSize, drawH = stickerSize;
+          if (stkImg.width > stkImg.height) { drawH = stickerSize * stkImg.height / stkImg.width; }
+          else { drawW = stickerSize * stkImg.width / stkImg.height; }
+          var stkX = isUser ? canvasW - padX - drawW : padX;
+          try { ctx.drawImage(stkImg, stkX, y, drawW, drawH); } catch(e) {}
+        }
+        y += msg.bubbleH + gap;
+        continue;
+      }
+
       // 气泡背景
       ctx.beginPath();
       if (isUser) {
@@ -1379,10 +1573,19 @@ document.addEventListener('DOMContentLoaded', () => {
       ctx.lineWidth = 1;
       ctx.stroke();
 
-      // 文字
-      ctx.fillStyle = isDark ? 'rgba(200,198,198,0.9)' : 'rgba(60,70,90,0.9)';
-      for (let i = 0; i < lines.length; i++) {
-        ctx.fillText(lines[i], bubbleX + bubblePadX, y + bubblePadY + fontSize + i * lineH);
+      // 内容：表情包画图片，普通消息画文字
+      if (msg.isSticker && stickerImages[msg.text]) {
+        var stkImg = stickerImages[msg.text];
+        var drawW = stickerSize, drawH = stickerSize;
+        if (stkImg.width > stkImg.height) { drawH = stickerSize * stkImg.height / stkImg.width; }
+        else { drawW = stickerSize * stkImg.width / stkImg.height; }
+        var stkX = isUser ? canvasW - padX - drawW - 4 : padX + 4;
+        try { ctx.drawImage(stkImg, stkX, y + 4, drawW, drawH); } catch(e) {}
+      } else {
+        ctx.fillStyle = isDark ? 'rgba(200,198,198,0.9)' : 'rgba(60,70,90,0.9)';
+        for (let i = 0; i < lines.length; i++) {
+          ctx.fillText(lines[i], bubbleX + bubblePadX, y + bubblePadY + fontSize + i * lineH);
+        }
       }
 
       y += bubbleH + gap;

@@ -2564,18 +2564,18 @@ const server = http.createServer(async (req, res) => {
     if (!decoded) return sendJSON(res, 401, { error: "未登录" });
     try {
       const chatId = req.url.split("/api/wc-chats/")[1].replace("/settings", "");
-      const body = await parseBody(req);
+      const body = await parseBody(req, 3 * 1024 * 1024);
       const data = readUserChats(decoded.id);
       const chat = (data.chats || []).find(c => c.id === chatId);
       if (!chat) return sendJSON(res, 404, { error: "对话不存在" });
       if (!chat.settings) chat.settings = {};
       // Merge all incoming settings fields
-      const allowedKeys = ['proactiveEnabled', 'bgPreset', 'bgImage', 'bubbleTheme', 'hueRotate', 'myBubbleColor', 'taBubbleColor'];
+      const allowedKeys = ['proactiveEnabled', 'bgPreset', 'bgImage', 'bubbleTheme', 'bubbleStyle', 'hueRotate', 'myBubbleColor', 'taBubbleColor'];
       for (const key of allowedKeys) {
         if (body.hasOwnProperty(key)) {
           if (key === 'proactiveEnabled') {
             chat.settings[key] = !!body[key];
-          } else if (key === 'bgImage' && body[key] && typeof body[key] === 'string' && body[key].length > 700000) {
+          } else if (key === 'bgImage' && body[key] && typeof body[key] === 'string' && body[key].length > 1500000) {
             return sendJSON(res, 400, { error: "图片太大" });
           } else {
             chat.settings[key] = body[key];

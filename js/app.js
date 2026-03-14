@@ -38,15 +38,31 @@ document.addEventListener('DOMContentLoaded', () => {
   // === 认证 ===
   const authModal = document.getElementById('auth-modal');
 
+  async function loadCredits() {
+    var creditsEl = document.getElementById('auth-credits');
+    if (!creditsEl) return;
+    try {
+      var res = await fetch('/api/credits', { headers: Auth.authHeaders() });
+      var data = await res.json();
+      if (data.credits !== undefined) {
+        creditsEl.textContent = data.credits + ' 积分';
+        creditsEl.style.display = '';
+      }
+    } catch(e) { creditsEl.style.display = 'none'; }
+  }
+
   function updateAuthUI() {
     if (Auth.isLoggedIn()) {
       const user = Auth.getUser();
       document.getElementById('auth-area').style.display = 'none';
       document.getElementById('auth-user-area').style.display = 'flex';
       document.getElementById('auth-nickname').textContent = user?.nickname || '';
+      loadCredits();
     } else {
       document.getElementById('auth-area').style.display = 'flex';
       document.getElementById('auth-user-area').style.display = 'none';
+      var creditsEl = document.getElementById('auth-credits');
+      if (creditsEl) creditsEl.style.display = 'none';
     }
   }
 
@@ -138,6 +154,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!user) return;
     document.getElementById('settings-nickname').value = user.nickname || '';
     document.getElementById('settings-email').textContent = user.email || '';
+    // 加载用户头像预览
+    try {
+      var avatarRaw = localStorage.getItem('wc-avatars');
+      var avatarObj = avatarRaw ? JSON.parse(avatarRaw) : {};
+      var previewImg = document.getElementById('settings-avatar-img');
+      var placeholder = document.querySelector('.settings-avatar-placeholder');
+      if (previewImg && avatarObj.me) {
+        previewImg.src = avatarObj.me;
+        previewImg.style.display = 'block';
+        if (placeholder) placeholder.style.display = 'none';
+      } else if (previewImg) {
+        previewImg.style.display = 'none';
+        if (placeholder) placeholder.style.display = '';
+      }
+    } catch(e) {}
     document.getElementById('settings-old-pwd').value = '';
     document.getElementById('settings-new-pwd').value = '';
     document.getElementById('settings-confirm-pwd').value = '';
@@ -1846,8 +1877,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const reading = lenormandDeck.currentReading;
     const question = document.getElementById("lenormand-question").value;
 
-    });
-
     const isDark = currentTheme === "dark";
     const canvasW = 600;
     const canvasH = 750;
@@ -1966,3 +1995,4 @@ document.addEventListener('DOMContentLoaded', () => {
     cimg2.src = "images/lenormand/" + encodeURIComponent(cards[1].image);
     cimg3.src = "images/lenormand/" + encodeURIComponent(cards[2].image);
   });
+});
