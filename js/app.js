@@ -182,6 +182,47 @@ document.addEventListener('DOMContentLoaded', () => {
     showScreen('welcome');
   });
 
+
+  // 设置页头像上传
+  var _settingsAvatarFile = document.getElementById("settings-avatar-file");
+  if (_settingsAvatarFile) {
+    _settingsAvatarFile.addEventListener("change", function(e) {
+      var file = e.target.files[0];
+      if (!file || !file.type.startsWith("image/")) return;
+      var reader = new FileReader();
+      reader.onload = function() {
+        var img = new Image();
+        img.onload = function() {
+          var c = document.createElement("canvas");
+          c.width = 128; c.height = 128;
+          var ctx = c.getContext("2d");
+          var s = Math.min(img.width, img.height);
+          var sx = (img.width - s) / 2;
+          var sy = (img.height - s) / 2;
+          ctx.drawImage(img, sx, sy, s, s, 0, 0, 128, 128);
+          var dataUrl = c.toDataURL("image/jpeg", 0.8);
+          var raw = localStorage.getItem("wc-avatars");
+          var obj = raw ? JSON.parse(raw) : {};
+          obj.me = dataUrl;
+          localStorage.setItem("wc-avatars", JSON.stringify(obj));
+          var previewImg = document.getElementById("settings-avatar-img");
+          var placeholder = document.querySelector(".settings-avatar-placeholder");
+          if (previewImg) { previewImg.src = dataUrl; previewImg.style.display = "block"; }
+          if (placeholder) placeholder.style.display = "none";
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+      _settingsAvatarFile.value = "";
+    });
+  }
+  // 点击头像预览也触发上传
+  var _settingsAvatarPreview = document.getElementById("settings-avatar-preview");
+  if (_settingsAvatarPreview && _settingsAvatarFile) {
+    _settingsAvatarPreview.addEventListener("click", function() {
+      _settingsAvatarFile.click();
+    });
+  }
   // 保存昵称
   document.getElementById('btn-save-nickname').addEventListener('click', async () => {
     const nickname = document.getElementById('settings-nickname').value;

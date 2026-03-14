@@ -1216,23 +1216,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Bubble theme — add class to messages container
-    msgArea.classList.remove('bubble-theme-sweetpink', 'bubble-theme-darknight', 'bubble-theme-classicblue', 'bubble-theme-capsule', 'bubble-theme-imessage', 'bubble-theme-dark', 'bubble-theme-pink', 'bubble-theme-minimal');
+    msgArea.classList.remove('bubble-theme-sweetpink', 'bubble-theme-darknight', 'bubble-theme-classicblue', 'bubble-theme-capsule', 'bubble-theme-imessage');
     if (settings.bubbleTheme && settings.bubbleTheme !== 'default') {
       msgArea.classList.add('bubble-theme-' + settings.bubbleTheme);
-    }
-    // 主题也加到 container 上（控制 header/input 样式）
-    if (container) {
-      container.classList.remove('chat-theme-dark', 'chat-theme-pink', 'chat-theme-minimal');
-      if (settings.bubbleTheme && settings.bubbleTheme !== 'default') {
-        container.classList.add('chat-theme-' + settings.bubbleTheme);
-      }
-      // 动态更新状态栏 + body 背景颜色
-      var themeColors = { dark: '#0b0d11', pink: '#f5e8ed', minimal: '#fafafa', default: '#f0f2f5' };
-      var tc = themeColors[settings.bubbleTheme] || themeColors['default'];
-      var metaTC = document.querySelector('meta[name="theme-color"]');
-      if (metaTC) metaTC.content = tc;
-      document.documentElement.style.background = tc;
-      document.body.style.background = tc;
     }
 
     // 色调 — hue-rotate on bubbles
@@ -1334,16 +1320,7 @@ document.addEventListener('DOMContentLoaded', () => {
     img.src = URL.createObjectURL(file);
   });
 
-  // Bubble theme clicks
-  document.querySelectorAll('#wc-theme-options .wc-theme-option').forEach(function(opt) {
-    opt.addEventListener('click', function() {
-      document.querySelectorAll('#wc-theme-options .wc-theme-option').forEach(function(o) { o.classList.remove('selected'); });
-      opt.classList.add('selected');
-      currentChatSettings.bubbleTheme = opt.dataset.theme;
-      saveChatVisualSetting({ bubbleTheme: opt.dataset.theme });
-      applyChatVisualSettings(currentChatSettings);
-    });
-  });
+
 
   // Bubble style clicks (separate from theme)
   document.querySelectorAll('#wc-bubble-options .wc-theme-option').forEach(function(opt) {
