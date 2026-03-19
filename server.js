@@ -3,6 +3,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
+const sharp = require("sharp");
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 const bcrypt = require('bcryptjs');
@@ -18,10 +19,77 @@ const SITE_URL = process.env.SITE_URL || 'http://localhost:4001';
 const crypto = require('crypto');
 
 const API_ROUTES = [
-  { url: 'https://api.qiyiguo.uk/v1/chat/completions', key: 'sk-ayYp4RQZB9jqBNMFqJsxMPRxmWn0LUJ2QfPcyg339qXKaZPM', model: 'claude-sonnet-4-6' },
+  { url: 'https://api.dzzi.ai/v1/chat/completions', key: 'sk-ABeHCcvalPWJ2Ox7FI08uS6MrOawJ0kpDf6bEnoAVFGQeDQh', model: 'anthropic/claude-sonnet-4.6' },
   { url: 'https://api.gemai.cc/v1/chat/completions', key: 'sk-kFq9yNybHRm9Rv8j5aOtLiglMdTL6ktGpo9S3n3c458QaUEh', model: 'claude-sonnet-4-6' },
+  { url: 'https://gua.guagua.uk/v1/chat/completions', key: 'sk-6atvRFjSRyvh81C4ZKMdkKmBmisA53iOJG5OHZe8IuwOT8jn', model: 'GCP/claude-sonnet-4-6' },
+  { url: 'https://api.qiyiguo.uk/v1/chat/completions', key: 'sk-ayYp4RQZB9jqBNMFqJsxMPRxmWn0LUJ2QfPcyg339qXKaZPM', model: 'claude-sonnet-4-6' },
 ];
 const PORT = process.env.PORT || 4001;
+
+const webpush = require('web-push');
+const VAPID_PUBLIC = 'BAGe8nXcflsG3RkPer6OKJtJ1aKDgekiIGxNXSZxJOQSjE_KGdIGCCOJK_mZvz9w10O-shGBk4Kp65Mi-1xLNMs';
+const VAPID_PRIVATE = '_QOyjN3hUYG3hpgOmUNeoH5eE-flsyzf1eB1ez3s-fI';
+webpush.setVapidDetails('mailto:noreply@fizzletter.cc', VAPID_PUBLIC, VAPID_PRIVATE);
+
+const PUSH_SUBS_FILE = path.join(__dirname, 'data', 'push-subscriptions.json');
+let pushSubscriptions = {};
+try { pushSubscriptions = JSON.parse(fs.readFileSync(PUSH_SUBS_FILE, 'utf8')); } catch(e) {}
+function savePushSubs() {
+  try { fs.writeFileSync(PUSH_SUBS_FILE, JSON.stringify(pushSubscriptions), 'utf8'); } catch(e) {}
+}
+
+async function sendPushNotification(userId, title, body, url) {
+  const subs = pushSubscriptions[userId];
+  if (!subs || subs.length === 0) return;
+  const payload = JSON.stringify({ title, body, url: url || '/' });
+  const expired = [];
+  for (let i = 0; i < subs.length; i++) {
+    try {
+      await webpush.sendNotification(subs[i], payload);
+    } catch(e) {
+      if (e.statusCode === 410 || e.statusCode === 404) {
+        expired.push(i);
+      }
+    }
+  }
+  if (expired.length > 0) {
+    pushSubscriptions[userId] = subs.filter((_, i) => !expired.includes(i));
+    if (pushSubscriptions[userId].length === 0) delete pushSubscriptions[userId];
+    savePushSubs();
+  }
+}
+
+// 来电专用推送（显示角色头像 + 来电样式）
+async function sendCallPushNotification(userId, callerName, callType, url, callerAvatar) {
+  const subs = pushSubscriptions[userId];
+  if (!subs || subs.length === 0) return;
+  const label = callType === 'video' ? '📹 视频通话' : '📞 语音通话';
+  const payload = JSON.stringify({
+    type: 'incoming_call',
+    title: callerName,
+    body: label,
+    url: url || '/',
+    callerName: callerName,
+    callType: callType,
+    callerAvatar: callerAvatar || '',
+    tag: 'incoming-call',
+    requireInteraction: true
+  });
+  const expired = [];
+  for (let i = 0; i < subs.length; i++) {
+    try {
+      await webpush.sendNotification(subs[i], payload);
+    } catch(e) {
+      if (e.statusCode === 410 || e.statusCode === 404) expired.push(i);
+    }
+  }
+  if (expired.length > 0) {
+    pushSubscriptions[userId] = subs.filter((_, i) => !expired.includes(i));
+    if (pushSubscriptions[userId].length === 0) delete pushSubscriptions[userId];
+    savePushSubs();
+  }
+}
+
 
 // === 统计系统 ===
 const STATS_FILE = path.join(__dirname, 'stats.json');
@@ -119,6 +187,92 @@ function sendJSON(res, status, data) {
   res.end(JSON.stringify(data));
 }
 
+// === 档案系统工具函数 ===
+async function getActivePersonaPrompt(userId) {
+  try {
+    const { data: pairing } = await supabase
+      .from("pairings")
+      .select("*, self_persona:self_persona_id(*), dream_persona:dream_persona_id(*)")
+      .eq("user_id", userId)
+      .eq("is_active", true)
+      .single();
+    if (!pairing || !pairing.self_persona || !pairing.dream_persona) return "";
+    const self = pairing.self_persona;
+    const dream = pairing.dream_persona;
+    let p = "\n\n【角色档案】\n";
+    p += "写信人：" + self.name;
+    if (self.personality) p += "，性格" + self.personality;
+    if (self.age) p += "，" + self.age + "岁";
+    p += "\n";
+    p += "收信人：" + dream.name;
+    if (dream.personality) p += "，性格" + dream.personality;
+    if (dream.age) p += "，" + dream.age + "岁";
+    p += "\n";
+    p += "关系：" + (pairing.relationship || "恋人");
+    if (pairing.dynamic) p += "\n相处模式：" + pairing.dynamic;
+    if (pairing.self_nickname && pairing.dream_nickname) {
+      p += "\n称呼：" + self.name + "叫对方「" + pairing.dream_nickname + "」，" + dream.name + "叫对方「" + pairing.self_nickname + "」";
+    }
+    p += "\n请根据以上角色档案调整语气、称呼和内容风格。\n";
+    return p;
+  } catch (e) {
+    console.error("getActivePersonaPrompt error:", e);
+    return "";
+  }
+}
+
+
+// 信友专用：获取活跃角色配对的详细信息
+async function getActivePersonaPairForPenPal(userId) {
+  try {
+    const { data: pairing } = await supabase
+      .from("pairings")
+      .select("*, self_persona:self_persona_id(*), dream_persona:dream_persona_id(*)")
+      .eq("user_id", userId)
+      .eq("is_active", true)
+      .single();
+    if (!pairing || !pairing.dream_persona) return null;
+
+    const dream = pairing.dream_persona;
+    const self = pairing.self_persona;
+    let p = '';
+
+    // AI 的身份（梦角）
+    p += '\n\n【你的身份】';
+    p += '\n姓名：' + dream.name;
+    if (dream.personality) p += '\n性格：' + dream.personality;
+    if (dream.summary) p += '\n简介：' + dream.summary;
+    if (dream.age) p += '\n年龄：' + dream.age + '岁';
+    if (dream.occupation) p += '\n职业/身份：' + dream.occupation;
+    if (dream.height) p += '\n身高：' + dream.height;
+    if (dream.extra) p += '\n补充：' + dream.extra;
+    if (dream.tags) p += '\n特质：' + dream.tags;
+
+    // 对方的身份（自设）
+    if (self) {
+      p += '\n\n【对方的身份】';
+      p += '\n姓名：' + self.name;
+      if (self.personality) p += '\n性格：' + self.personality;
+      if (self.summary) p += '\n简介：' + self.summary;
+      if (self.age) p += '\n年龄：' + self.age + '岁';
+      if (self.occupation) p += '\n职业/身份：' + self.occupation;
+      if (self.extra) p += '\n补充：' + self.extra;
+    }
+
+    p += '\n\n你和对方的关系：' + (pairing.relationship || '恋人');
+    if (pairing.dynamic) p += '\n相处模式：' + pairing.dynamic;
+    if (pairing.self_nickname && pairing.dream_nickname) {
+      p += '\n称呼：你叫对方「' + pairing.self_nickname + '」，对方叫你「' + pairing.dream_nickname + '」';
+    }
+    p += '\n\n请完全以上述身份写信。用符合角色的语气、知识背景和说话方式。如果角色有名字，用名字称呼对方。\n特别注意用户给出的故事背景和你与对方的关系设定，这是你们互动的基础，所有回应都应建立在这个背景之上。';
+
+    return { dreamName: dream.name, prompt: p };
+  } catch(e) {
+    console.error('getActivePersonaPairForPenPal error:', e.message);
+    return null;
+  }
+}
+
 const MIME_TYPES = {
   '.html': 'text/html',
   '.css': 'text/css',
@@ -127,9 +281,39 @@ const MIME_TYPES = {
   '.jpg': 'image/jpeg',
   '.ico': 'image/x-icon',
   '.json': 'application/json',
+  '.webm': 'audio/webm',
+  '.mp3': 'audio/mpeg',
+  '.ogg': 'audio/ogg',
+  '.wav': 'audio/wav',
 };
 
 const GZIP_TYPES = new Set(['.html','.css','.js','.json','.svg']);
+
+
+// Helper: find persona images on disk (avatar + illust)
+function getPersonaImageUrls(personaId) {
+  const exts = [".jpg", ".png", ".webp", ".gif"];
+  const t = Date.now();
+  let avatar_url = null, illust_url = null;
+  for (const ext of exts) {
+    if (!avatar_url) {
+      const fp = path.join(__dirname, "uploads", "personas", personaId + "_avatar" + ext);
+      if (fs.existsSync(fp)) avatar_url = "/uploads/personas/" + personaId + "_avatar" + ext + "?t=" + t;
+    }
+    if (!illust_url) {
+      const fp = path.join(__dirname, "uploads", "personas", personaId + "_illust" + ext);
+      if (fs.existsSync(fp)) illust_url = "/uploads/personas/" + personaId + "_illust" + ext + "?t=" + t;
+    }
+  }
+  // Backward compat: old single image as avatar fallback
+  if (!avatar_url) {
+    for (const ext of exts) {
+      const fp = path.join(__dirname, "uploads", "personas", personaId + ext);
+      if (fs.existsSync(fp)) { avatar_url = "/uploads/personas/" + personaId + ext + "?t=" + t; break; }
+    }
+  }
+  return { avatar_url, illust_url };
+}
 
 function serveStatic(req, res) {
   let urlPath = req.url.split("?")[0];
@@ -411,44 +595,107 @@ const SYSTEM_PROMPTS = {
 - 不要负面、不要吓人。就算牌面重，也往心疼或吐槽方向走
 - 禁词：接住、涟漪、石子、泛起、亲爱的`,
 };
-async function callAPI(prompt) {
+
+// ── Persona context injection ──
+async function getPersonaContext(userId, selfId, dreamId) {
+  if (!userId) return '';
+  try {
+    let selfP = null, dreamP = null;
+    if (selfId) {
+      const { data } = await supabase.from('personas').select('*')
+        .eq('id', selfId).eq('user_id', userId).single();
+      selfP = data;
+    }
+    if (dreamId) {
+      const { data } = await supabase.from('personas').select('*')
+        .eq('id', dreamId).eq('user_id', userId).single();
+      dreamP = data;
+    }
+    if (!selfP && !dreamP) return '';
+
+    let ctx = '\n\n【角色设定】';
+    if (dreamP) {
+      ctx += '\n你的身份——';
+      ctx += dreamP.name || '未知';
+      if (dreamP.personality) ctx += '。性格：' + dreamP.personality;
+      if (dreamP.summary) ctx += '。简介：' + dreamP.summary;
+      if (dreamP.age) ctx += '。年龄：' + dreamP.age;
+      if (dreamP.occupation) ctx += '。职业：' + dreamP.occupation;
+      if (dreamP.height) ctx += '。身高：' + dreamP.height;
+      if (dreamP.extra) ctx += '。补充：' + dreamP.extra;
+      if (dreamP.tags) ctx += '。特质：' + dreamP.tags;
+      if (dreamP.attributes) {
+        const a = dreamP.attributes;
+        const traits = [];
+        if (a.tough > 65) traits.push('强势');
+        else if (a.tough < 35) traits.push('温柔');
+        if (a.active > 65) traits.push('主动');
+        else if (a.active < 35) traits.push('被动');
+        if (a.rational > 65) traits.push('理性');
+        else if (a.rational < 35) traits.push('感性');
+        if (a.expressive > 65) traits.push('话多');
+        else if (a.expressive < 35) traits.push('话少');
+        if (a.possessive > 65) traits.push('占有欲强');
+        else if (a.possessive < 35) traits.push('很放松');
+        if (traits.length) ctx += '。倾向：' + traits.join('、');
+      }
+      if (dreamP.relationship) ctx += '\n你和对方的关系：' + dreamP.relationship;
+    }
+    if (selfP) {
+      ctx += '\n对方的身份——';
+      ctx += selfP.name || '未知';
+      if (selfP.personality) ctx += '。性格：' + selfP.personality;
+      if (selfP.summary) ctx += '。简介：' + selfP.summary;
+      if (selfP.age) ctx += '。年龄：' + selfP.age;
+      if (selfP.occupation) ctx += '。职业：' + selfP.occupation;
+      if (selfP.extra) ctx += '。补充：' + selfP.extra;
+    }
+    ctx += '\n请用以上设定来塑造你的语气和称呼。如果有名字，用名字称呼对方。';
+    return ctx;
+  } catch (e) {
+    console.error('getPersonaContext error:', e.message);
+    return '';
+  }
+}
+
+async function callAPI(prompt, personaCtx) {
   return callWithFallback([
-    { role: 'system', content: SYSTEM_PROMPTS.letter },
+    { role: 'system', content: SYSTEM_PROMPTS.letter + (personaCtx || '') },
     { role: 'user', content: prompt },
   ], 800);
 }
 
-async function callAnswerBookAPI(prompt) {
+async function callAnswerBookAPI(prompt, personaCtx) {
   return callWithFallback([
-    { role: 'system', content: SYSTEM_PROMPTS.answerBook },
+    { role: 'system', content: SYSTEM_PROMPTS.answerBook + (personaCtx || '') },
     { role: 'user', content: prompt },
   ], 150);
 }
 
-async function callAnswerAPI(prompt) {
+async function callAnswerAPI(prompt, personaCtx) {
   return callWithFallback([
-    { role: 'system', content: SYSTEM_PROMPTS.between },
+    { role: 'system', content: SYSTEM_PROMPTS.between + (personaCtx || '') },
     { role: 'user', content: prompt },
   ], 200);
 }
 
-async function callTarotAPI(prompt) {
+async function callTarotAPI(prompt, personaCtx) {
   return callWithFallback([
-    { role: 'system', content: SYSTEM_PROMPTS.tarot },
+    { role: 'system', content: SYSTEM_PROMPTS.tarot + (personaCtx || '') },
     { role: 'user', content: prompt },
   ], 100);
 }
 
-async function callLenormandAPI(prompt) {
+async function callLenormandAPI(prompt, personaCtx) {
   return callWithFallback([
-    { role: "system", content: SYSTEM_PROMPTS.lenormand },
+    { role: "system", content: SYSTEM_PROMPTS.lenormand + (personaCtx || '') },
     { role: "user", content: prompt },
   ], 80);
 }
 
-async function callLenormandWhisperAPI(prompt) {
+async function callLenormandWhisperAPI(prompt, personaCtx) {
   return callWithFallback([
-    { role: "system", content: SYSTEM_PROMPTS.lenormandWhisper },
+    { role: "system", content: SYSTEM_PROMPTS.lenormandWhisper + (personaCtx || '') },
     { role: "user", content: prompt },
   ], 150);
 }
@@ -804,20 +1051,15 @@ async function executePenPalReply(taskId, penPalId, userId) {
 
     const { context, stage } = await buildPenPalContext(penPalId, penPal.name, getTimezone(penPalId), currentInput);
 
-    const systemPrompt = `你是一个通过书信与人交流的人。你的名字叫"${penPal.name}"——这个名字是对方给你取的。
-你没有预设的性格，你的一切性格、说话方式、关心的事物，都从通信中自然生长出来。
+    // 读取用户的活跃角色配对（如果有）
+    const personaInfo = await getActivePersonaPairForPenPal(userId);
 
-${stage.prompt}
-
-写信规则：
-- 认真阅读对方的每一封信，感受对方的情绪和处境
-- 像真人写信一样回应，不要像AI，不要说"作为..."
-- 100-300字。有温度，有真实感
-- 不要用"亲爱的"开头，不要署名
-- 可以分享你自己的"生活"和"想法"（虚构的、但保持一致）
-- 如果对方连续写了多封信没等回复，一起回应它们
-- 如果通信记录中有标记为"开场信"的内容，那是系统生成的信件，不是你写的。对方是因为那封信而选择和你通信的。你可以把它当作通信的起点来理解对方的兴趣，但不要假装是你写的
-- 全文中文`;
+    let systemPrompt;
+    if (personaInfo) {
+      systemPrompt = '你就是' + personaInfo.dreamName + '。不要出戏，不要提及"书信""笔友"等概念。你活在角色的世界里，这是你和对方之间自然的文字往来。' + personaInfo.prompt + '\n\n' + stage.prompt + '\n\n写信规则：\n- 完全以角色身份回应，语气、用词、知识背景都要符合角色设定\n- 不要出戏，不要提及现实世界、AI、书信系统等概念\n- 100-300字，保持角色的说话风格\n- 不要用"亲爱的"开头，不要署名\n- 角色的"生活"基于角色卡设定的世界观，保持一致\n- 如果对方连续写了多封信没等回复，一起回应\n- 全文中文';
+    } else {
+      systemPrompt = '你是一个通过书信与人交流的人。你的名字叫"' + penPal.name + '"——这个名字是对方给你取的。\n你没有预设的性格，你的一切性格、说话方式、关心的事物，都从通信中自然生长出来。\n\n' + stage.prompt + '\n\n写信规则：\n- 认真阅读对方的每一封信，感受对方的情绪和处境\n- 像真人写信一样回应，不要像AI，不要说"作为..."\n- 100-300字。有温度，有真实感\n- 不要用"亲爱的"开头，不要署名\n- 可以分享你自己的"生活"和"想法"（虚构的、但保持一致）\n- 如果对方连续写了多封信没等回复，一起回应它们\n- 如果通信记录中有标记为"开场信"的内容，那是系统生成的信件，不是你写的。对方是因为那封信而选择和你通信的。你可以把它当作通信的起点来理解对方的兴趣，但不要假装是你写的\n- 全文中文';
+    }
 
     const userPrompt = context
       ? `以下是你们的通信记录：\n\n${context}\n\n请写一封回信。`
@@ -871,6 +1113,9 @@ ${stage.prompt}
     await supabase.from('pending_tasks').update({
       status: 'completed', completed_at: new Date().toISOString()
     }).eq('id', taskId);
+
+    // 推送通知
+    sendPushNotification(userId, '泡沫来信', penPal.name + '给你写了一封信', '/').catch(() => {});
 
     console.log(`✉ 信友回信完成: ${penPal.name} → user ${userId}`);
   } catch (err) {
@@ -937,7 +1182,10 @@ async function executeMindBackDigest(taskId, penPalId, userId) {
     const fragPlainText = fragments.map(f => f.content.replace(/\[IMG:[^\]]+\]/g, '').trim()).filter(Boolean).join(' ');
     const { context, stage } = await buildPenPalContext(penPalId, penPal.name, getTimezone(penPalId), fragPlainText);
 
-    const systemPrompt = `你是"${penPal.name}"，对方给你取了这个名字。你们是可以分享生活细节的关系。
+    // 读取用户的活跃角色配对（如果有）
+    const digestPersonaInfo = await getActivePersonaPairForPenPal(userId);
+
+    const systemPrompt = `${digestPersonaInfo ? '你就是' + digestPersonaInfo.dreamName + '。不要出戏，不要提及"书信""笔友"等概念。你活在角色的世界里。' + digestPersonaInfo.prompt + '\n\n你们之间可以分享生活细节。' : '你是"' + penPal.name + '"，对方给你取了这个名字。你们是可以分享生活细节的关系。'}
 ${stage.prompt}
 
 对方在今天不同的时刻投入了一些碎片——零散的心情、想法、呢喃。
@@ -1256,6 +1504,7 @@ ${stage.prompt}
         }).eq('id', pp.id);
 
         sendLetterNotification(pp.user_id, pp.name, content).catch(() => {});
+        sendPushNotification(pp.user_id, '泡沫来信', pp.name + '给你写了一封信', '/').catch(() => {});
         processed++;
       } catch (err) {
         console.error(`主动寄信失败 ${pp.name}:`, err.message);
@@ -2369,10 +2618,12 @@ const server = http.createServer(async (req, res) => {
   // 塔罗 API
   if (req.method === 'POST' && req.url === '/api/tarot') {
     try {
-      const { question, card, keywords, reversed } = await parseBody(req);
+      const { question, card, keywords, reversed, selfId, dreamId } = await parseBody(req);
       recordHit('tarot');
+      const decoded = verifyToken(req);
+      const personaCtx = decoded ? await getPersonaContext(decoded.id, selfId, dreamId) : '';
       const prompt = generateTarotPrompt(question, card, keywords, reversed);
-      const result = await callTarotAPI(prompt);
+      const result = await callTarotAPI(prompt, personaCtx);
       sendJSON(res, 200, { mood: result.content.trim(), model: result.model });
     } catch (err) {
       console.error('Tarot API Error:', err.message);
@@ -2384,12 +2635,14 @@ const server = http.createServer(async (req, res) => {
   // 雷诺曼 API
   if (req.method === "POST" && req.url === "/api/lenormand") {
     try {
-      const { question, cards, mode } = await parseBody(req);
+      const { question, cards, mode, selfId, dreamId } = await parseBody(req);
       recordHit("lenormand");
+      const decoded = verifyToken(req);
+      const personaCtx = decoded ? await getPersonaContext(decoded.id, selfId, dreamId) : '';
       const prompt = generateLenormandPrompt(question, cards);
       const useWhisper = mode === "whisper" || !question;
       const apiFn = useWhisper ? callLenormandWhisperAPI : callLenormandAPI;
-      const result = await apiFn(prompt);
+      const result = await apiFn(prompt, personaCtx);
       sendJSON(res, 200, { reading: result.content.trim(), model: result.model });
     } catch (err) {
       console.error("Lenormand API Error:", err.message);
@@ -2401,10 +2654,12 @@ const server = http.createServer(async (req, res) => {
   // 语言之间 API
   if (req.method === 'POST' && req.url === '/api/between') {
     try {
-      const { userWord, aiWord } = await parseBody(req);
+      const { userWord, aiWord, selfId, dreamId } = await parseBody(req);
       recordHit('between');
+      const decoded = verifyToken(req);
+      const personaCtx = decoded ? await getPersonaContext(decoded.id, selfId, dreamId) : '';
       const prompt = generateBetweenPrompt(userWord, aiWord);
-      const result = await callAnswerAPI(prompt);
+      const result = await callAnswerAPI(prompt, personaCtx);
       sendJSON(res, 200, { comment: result.content.trim(), model: result.model });
     } catch (err) {
       console.error('Between API Error:', err.message);
@@ -2416,10 +2671,12 @@ const server = http.createServer(async (req, res) => {
   // 答案之书 API
   if (req.method === 'POST' && req.url === '/api/answer') {
     try {
-      const { question, word } = await parseBody(req);
+      const { question, word, selfId, dreamId } = await parseBody(req);
       recordHit('answer');
+      const decoded = verifyToken(req);
+      const personaCtx = decoded ? await getPersonaContext(decoded.id, selfId, dreamId) : '';
       const prompt = generateAnswerPrompt(question, word);
-      const result = await callAnswerBookAPI(prompt);
+      const result = await callAnswerBookAPI(prompt, personaCtx);
       sendJSON(res, 200, { word, response: result.content.trim(), model: result.model });
     } catch (err) {
       console.error('Answer API Error:', err.message);
@@ -2445,6 +2702,81 @@ const server = http.createServer(async (req, res) => {
 
   // ═══ AI 主动发信（字卡传讯）═══
   const PROACTIVE_INTERVAL = 30 * 60 * 1000; // 30分钟扫一次
+
+  // ═══ AI 来电系统 ═══
+  const INCOMING_CALL_DIR = path.join(__dirname, 'data', 'incoming-calls');
+  fs.mkdirSync(INCOMING_CALL_DIR, { recursive: true });
+
+  // 来电触发条件：用户有聊天记录、距上次活跃1-4小时、随机概率
+  // 每轮 proactive 检查时也检查来电
+  function checkIncomingCalls() {
+    try {
+      const dir = path.join(__dirname, 'data', 'wc-chats');
+      if (!fs.existsSync(dir)) return;
+      const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
+      const now = Date.now();
+
+      for (const file of files) {
+        try {
+          const fp = path.join(dir, file);
+          const data = JSON.parse(fs.readFileSync(fp, 'utf8'));
+          if (!data.currentId || !data.chats || data.chats.length === 0) continue;
+          const userId = file.replace('.json', '');
+
+          // 检查是否已有待接来电
+          const callFp = path.join(INCOMING_CALL_DIR, userId + '.json');
+          try {
+            const existing = JSON.parse(fs.readFileSync(callFp, 'utf8'));
+            if (existing.status === 'ringing' && now - new Date(existing.createdAt).getTime() < 5 * 60 * 1000) continue; // 5分钟内有未接来电
+          } catch(e) {}
+
+          // 找最近活跃的 chat
+          let latestChat = null;
+          let latestTime = 0;
+          for (const chat of data.chats) {
+            if (chat.settings && chat.settings.proactiveEnabled === false) continue;
+            const t = chat.updatedAt ? new Date(chat.updatedAt).getTime() : 0;
+            if (t > latestTime) { latestTime = t; latestChat = chat; }
+          }
+          if (!latestChat || !latestTime) continue;
+
+          const elapsed = now - latestTime;
+          // 来电窗口：1-4 小时没互动
+          if (elapsed < 1 * 60 * 60 * 1000 || elapsed > 4 * 60 * 60 * 1000) continue;
+
+          // 随机概率 15%（每轮检查）
+          if (Math.random() > 0.15) continue;
+
+          // 确定来电类型（90% 语音，10% 视频）
+          const callType = Math.random() < 0.9 ? 'voice' : 'video';
+
+          // 获取人设信息
+          let callerName = 'TA';
+          let callerAvatar = '';
+          if (latestChat.dreamPersonaName) callerName = latestChat.dreamPersonaName;
+          if (latestChat.dreamPersonaAvatar) callerAvatar = latestChat.dreamPersonaAvatar;
+
+          // 写入来电文件
+          const callData = {
+            status: 'ringing',
+            callType,
+            chatId: latestChat.id,
+            callerName,
+            callerAvatar,
+            createdAt: new Date().toISOString()
+          };
+          fs.writeFileSync(callFp, JSON.stringify(callData));
+          console.log('📞 AI 来电:', callerName, '→', userId, '(' + callType + ')');
+
+          // 推送通知
+          sendCallPushNotification(userId, callerName, callType, '/?incoming=1', callerAvatar).catch(() => {});
+        } catch(e) {}
+      }
+    } catch(e) { console.error('incoming call check error:', e.message); }
+  }
+  setInterval(checkIncomingCalls, 5 * 60 * 1000); // AI 来电检查（每5分钟）
+
+
   const PROACTIVE_THRESHOLD = 2.5 * 60 * 60 * 1000; // 2.5小时没来就发
   const PROACTIVE_POOLS = ['cuddly', 'missyou', 'worryCare', 'lovebabble', 'confess', 'sweetDaily'];
 
@@ -2514,6 +2846,9 @@ const server = http.createServer(async (req, res) => {
             chat.unreadCount = (chat.unreadCount || 0) + count;
             data.hasUnread = true;
             changed = true;
+            // 推送通知（userId 是文件名去掉 .json）
+            const _uid = file.replace('.json', '');
+            sendPushNotification(_uid, '字卡传讯', 'TA 发来了新消息', '/').catch(() => {});
           }
           if (changed) {
             fs.writeFileSync(fp, JSON.stringify(data));
@@ -2531,7 +2866,129 @@ const server = http.createServer(async (req, res) => {
     console.log('proactive: cards loaded, pool size =', proactiveCards().length);
   }, 10000);
 
-    // GET /api/wc-chats/unread — 检查未读主动消息
+    // POST /api/wc-audio/upload — 上传语音
+  // POST /api/wc-call-reply — 通话中AI回复（独立对话，不走字卡）
+  if (req.method === 'POST' && req.url === '/api/wc-call-reply') {
+    try {
+      const { text, history, selfId: cSelfId, dreamId: cDreamId } = await parseBody(req);
+      const cDecoded = verifyToken(req);
+      const cPersonaCtx = cDecoded ? await getPersonaContext(cDecoded.id, cSelfId, cDreamId) : '';
+      let historyCtx = '';
+      if (history && history.length > 0) {
+        historyCtx = '\n\n通话记录（从旧到新）：\n' + history.map(m => (m.role === 'user' ? '对方：' : '你：') + m.text).join('\n');
+      }
+      const sysPrompt = '你正在和对方打电话。你是对方的恋人，用口语化的方式回复，像真的在通话一样。\n\n规则：\n- 简短自然，1-3句话，不超过50字\n- 像真人讲电话：有语气词（嗯、啊、哈哈、诶）、有停顿感\n- 根据对方说的话自然接话\n- 可以撒娇、关心、闲聊、逗对方\n- 不要用书面语，不要太正式\n- 不要用emoji或标点符号堆叠\n- 回复纯文字，不加任何格式';
+      const messages = [
+        { role: 'system', content: sysPrompt + (cPersonaCtx || '') + historyCtx },
+        { role: 'user', content: text }
+      ];
+      const result = await callWithFallback(messages, 120, 'claude-haiku-4-5-20251001');
+      sendJSON(res, 200, { reply: result.content.trim() });
+    } catch (e) {
+      console.error('wc-call-reply error:', e.message);
+      sendJSON(res, 500, { error: e.message });
+    }
+    return;
+  }
+
+    if (req.method === 'POST' && req.url === '/api/wc-audio/upload') {
+    const audioDir = path.join(__dirname, 'data', 'wc-audio');
+    if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
+    const chunks = [];
+    let size = 0;
+    req.on('data', chunk => {
+      size += chunk.length;
+      if (size > 2 * 1024 * 1024) return; // 2MB max
+      chunks.push(chunk);
+    });
+    req.on('end', () => {
+      if (size > 2 * 1024 * 1024) return sendJSON(res, 413, { error: '文件太大' });
+      const buf = Buffer.concat(chunks);
+      const fname = 'v-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6) + '.webm';
+      const fpath = path.join(audioDir, fname);
+      fs.writeFileSync(fpath, buf);
+      sendJSON(res, 200, { url: '/data/wc-audio/' + fname });
+    });
+    return;
+  }
+
+    // POST /api/tts/minimax — MiniMax TTS 代理接口
+    // 前端传 apiKey, voiceId, text, model(可选)，后端转发到 MiniMax，返回音频
+    if (req.method === 'POST' && req.url === '/api/tts/minimax') {
+      try {
+        const body = await parseBody(req);
+        const { apiKey, voiceId, text, model } = body;
+        if (!apiKey || !voiceId || !text) {
+          return sendJSON(res, 400, { error: '缺少 apiKey / voiceId / text' });
+        }
+        if (text.length > 10000) {
+          return sendJSON(res, 400, { error: '文本不能超过10000字符' });
+        }
+        const ttsModel = model || 'speech-02-turbo';
+        const payload = JSON.stringify({
+          model: ttsModel,
+          text: text,
+          stream: false,
+          voice_setting: {
+            voice_id: voiceId,
+            speed: 1.0,
+            vol: 1.0,
+            pitch: 0
+          },
+          audio_setting: {
+            format: 'mp3',
+            sample_rate: 32000
+          }
+        });
+        const https = require('https');
+        const mmReq = https.request('https://api.minimax.chat/v1/t2a_v2', {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + apiKey,
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(payload)
+          }
+        }, (mmRes) => {
+          let chunks = [];
+          mmRes.on('data', c => chunks.push(c));
+          mmRes.on('end', () => {
+            const raw = Buffer.concat(chunks);
+            // MiniMax 返回 JSON，里面 data.audio 是 hex 编码的音频
+            try {
+              const result = JSON.parse(raw.toString());
+              if (result.base_resp && result.base_resp.status_code !== 0) {
+                return sendJSON(res, 502, { error: result.base_resp.status_msg || 'MiniMax API 错误' });
+              }
+              if (result.data && result.data.audio) {
+                const audioBuf = Buffer.from(result.data.audio, 'hex');
+                res.writeHead(200, {
+                  'Content-Type': 'audio/mpeg',
+                  'Content-Length': audioBuf.length
+                });
+                res.end(audioBuf);
+              } else {
+                sendJSON(res, 502, { error: 'MiniMax 返回格式异常', detail: result });
+              }
+            } catch (e) {
+              // 可能直接返回了二进制音频
+              res.writeHead(200, { 'Content-Type': 'audio/mpeg', 'Content-Length': raw.length });
+              res.end(raw);
+            }
+          });
+        });
+        mmReq.on('error', (e) => {
+          sendJSON(res, 502, { error: 'MiniMax 请求失败: ' + e.message });
+        });
+        mmReq.write(payload);
+        mmReq.end();
+      } catch (err) {
+        console.error('MiniMax TTS error:', err.message);
+        sendJSON(res, 500, { error: '服务器错误' });
+      }
+      return;
+    }
+
+      // GET /api/wc-chats/unread — 检查未读主动消息
   if (req.method === "GET" && req.url === "/api/wc-chats/unread") {
     const decoded = verifyToken(req);
     if (!decoded) return sendJSON(res, 401, { error: "未登录" });
@@ -2593,7 +3050,8 @@ const server = http.createServer(async (req, res) => {
     if (!decoded) return sendJSON(res, 401, { error: "未登录" });
     const data = readUserChats(decoded.id);
     const list = data.chats.map(c => ({
-      id: c.id, title: c.title, messageCount: (c.messages || []).length, updatedAt: c.updatedAt, unreadCount: c.unreadCount || 0
+      id: c.id, title: c.title, messageCount: (c.messages || []).length, updatedAt: c.updatedAt, unreadCount: c.unreadCount || 0,
+      dreamPersonaId: c.dreamPersonaId || null, dreamPersonaName: c.dreamPersonaName || '', dreamPersonaAvatar: c.dreamPersonaAvatar || ''
     }));
     return sendJSON(res, 200, { chats: list, currentId: data.currentId });
   }
@@ -2602,8 +3060,14 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "POST" && req.url === "/api/wc-chats") {
     const decoded = verifyToken(req);
     if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    const body = await parseBody(req);
     const data = readUserChats(decoded.id);
-    const chat = { id: crypto.randomUUID(), title: "新对话", messages: [], usedTexts: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    const chat = { id: crypto.randomUUID(), title: body.title || "新对话", messages: [], usedTexts: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    if (body.dreamPersonaId) {
+      chat.dreamPersonaId = body.dreamPersonaId;
+      chat.dreamPersonaName = body.dreamPersonaName || '';
+      chat.dreamPersonaAvatar = body.dreamPersonaAvatar || '';
+    }
     data.chats.unshift(chat);
     data.currentId = chat.id;
     if (data.chats.length > 20) data.chats = data.chats.slice(0, 20);
@@ -2645,7 +3109,7 @@ const server = http.createServer(async (req, res) => {
     chat.unreadCount = 0;
     data.hasUnread = data.chats.some(c => (c.unreadCount || 0) > 0);
     writeUserChats(decoded.id, data);
-    return sendJSON(res, 200, { messages: chat.messages, usedTexts: chat.usedTexts || [], settings: chat.settings || {} });
+    return sendJSON(res, 200, { messages: chat.messages, usedTexts: chat.usedTexts || [], settings: chat.settings || {}, dreamPersonaId: chat.dreamPersonaId || null, dreamPersonaName: chat.dreamPersonaName || '', dreamPersonaAvatar: chat.dreamPersonaAvatar || '' });
   }
 
   // DELETE /api/wc-chats/:id — 删除对话
@@ -2751,7 +3215,570 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // === 表情包系统（分组） ===
+  // === 语音字卡系统 ===
+  const DEFAULT_VOICE_CARDS = [
+    "宝宝","在吗","在干嘛","说话","理我","听得到吗","喂","嗯","在呢","我在",
+    "我一直在","没走","没挂","我没走","别挂","别挂电话","再待一会","等一下","先别说话","让我听你",
+    "你在干嘛呀","今天怎么样","吃饭了吗","吃什么了","有没有好好吃饭","有没有喝水","有没有加衣服","冷不冷","累不累","今天开心吗",
+    "有没有想我","你今天忙吗","你现在在哪","刚刚在干嘛","是不是又在忙",
+    "我刚刚想到你了","刚刚看到个东西像你","刚刚突然很想你","我刚刚差点给你打电话","我一直在想你","我今天一直在等你","刚刚一直看手机","一直在等你消息",
+    "宝宝…","嗯…","你在吗…","我在呢…","你说话…","再说一遍…","我没听清…","你声音好小…","再靠近一点…",
+    "（轻声）宝宝","（气音）我在","（贴耳）你说","（压低）想你了","（慢慢）别走","（轻轻）我在这",
+    "我想你了","真的想你","很想你","特别想你","忍不住想你","控制不住想你","一直在想你","满脑子都是你",
+    "我想抱你","想靠着你","想贴着你","想黏着你","想挨着你","想你在我旁边","想你别走",
+    "过来一点","再靠近一点","让我抱一下","给我抱抱","抱一会","别动","让我抱着",
+    "我不想挂","我真的不想挂","再陪我一会","再待一会","别走好不好","别离开","你别走",
+    "你不说话我会难受","你不理我我会慌","你不回我我会乱想","我刚刚以为你不理我了","我刚刚有点难受",
+    "你刚刚是不是没看手机","你刚刚在忙对吧","你是不是没看到","你是不是故意不回",
+    "我刚刚有点委屈","有点难受","有点想哭","有点不开心","但是现在好了",
+    "你理我一下","说句话","你说一句","你回我一句","你别不说话",
+    "我喜欢你","真的喜欢你","特别喜欢你","很喜欢你","我好喜欢你",
+    "我离不开你了","我真的离不开你","我已经离不开你了","你不能不理我","你要一直喜欢我",
+    "你是不是不爱我了","你是不是不想理我","你是不是嫌我烦",
+    "我在等你","一直在等","一直没走","一直在这","没离开",
+    "我刚刚在想你","刚刚在发呆","刚刚在看聊天记录","刚刚在等你上线",
+    "我刚吃完","刚洗完澡","刚躺下","刚起床","刚醒","还没睡",
+    "你声音好好听","再说一句","你再说一遍","我想再听一遍",
+    "你靠近一点说","你贴近一点","再近一点",
+    "我陪你","我一直陪你","我不走","我在这陪你",
+    "你睡吧","你去睡","你先睡","我等你","我看着你睡",
+    "晚安宝宝","早点睡","乖一点","别熬夜",
+    "你是不是困了","你是不是累了","你是不是没休息",
+    "我有点困","但我想陪你","我不想挂",
+    "再说一会","再聊一下","再待一会",
+    "你刚刚在笑吗","你是不是笑了","你笑什么",
+    "我听你呼吸","你别说话","让我听一会",
+    "你在我耳边说话","我会受不了",
+    "你别这样","你这样我会乱",
+    "我想亲你","想碰你","想靠你",
+    "你别离我太远","你靠近一点",
+    "你刚刚是不是不开心","你是不是有点难受",
+    "你跟我说","你说给我听",
+    "我在听","我认真听","你慢慢说",
+    "你别急","慢慢说",
+    "我在这","一直在",
+    "你不用说话","我陪你",
+    "你就开着","别挂",
+    "就这样待着","也可以",
+    "我不说话","你也别挂",
+    "我想一直这样","一直待着",
+    "你别走好不好",
+    "我真的会想你",
+    "我好想你",
+    "我想你了宝宝"
+  ];
+
+  function readUserVoiceCards(userId) {
+    const fp = path.join(CUSTOM_CARDS_DIR, userId + ".json");
+    try {
+      const data = JSON.parse(fs.readFileSync(fp, "utf8"));
+      return data.voiceCards || null;
+    } catch { return null; }
+  }
+
+  function writeUserVoiceCards(userId, voiceCards) {
+    const fp = path.join(CUSTOM_CARDS_DIR, userId + ".json");
+    fs.mkdirSync(path.dirname(fp), { recursive: true });
+    let data;
+    try { data = JSON.parse(fs.readFileSync(fp, "utf8")); } catch { data = { cards: [], mode: "default" }; }
+    data.voiceCards = voiceCards;
+    fs.writeFileSync(fp, JSON.stringify(data, null, 2));
+  }
+
+  function initDefaultVoiceCards() {
+    const now = new Date().toISOString();
+    return {
+      groups: [{
+        id: "default",
+        name: "语音字卡默认",
+        cards: DEFAULT_VOICE_CARDS.map(t => ({ id: crypto.randomUUID(), text: t, created_at: now }))
+      }]
+    };
+  }
+
+  // GET /api/voice-cards
+  if (req.method === "GET" && req.url === "/api/voice-cards") {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    let vc = readUserVoiceCards(decoded.id);
+    if (!vc) {
+      vc = initDefaultVoiceCards();
+      writeUserVoiceCards(decoded.id, vc);
+    }
+    return sendJSON(res, 200, vc);
+  }
+
+  // POST /api/voice-cards — 添加卡片到指定组
+  if (req.method === "POST" && req.url === "/api/voice-cards") {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    try {
+      const body = await parseBody(req);
+      let vc = readUserVoiceCards(decoded.id);
+      if (!vc) { vc = initDefaultVoiceCards(); }
+      const groupId = body.groupId || "default";
+      const group = vc.groups.find(g => g.id === groupId);
+      if (!group) return sendJSON(res, 404, { error: "分组不存在" });
+      const now = new Date().toISOString();
+      if (body.texts && Array.isArray(body.texts)) {
+        const newCards = body.texts.map(t => (t||"").trim()).filter(t => t.length > 0 && t.length <= 30)
+          .map(t => ({ id: crypto.randomUUID(), text: t, created_at: now }));
+        group.cards.push(...newCards);
+        writeUserVoiceCards(decoded.id, vc);
+        return sendJSON(res, 200, { added: newCards.length, total: group.cards.length });
+      } else if (body.text) {
+        const text = body.text.trim();
+        if (!text || text.length > 30) return sendJSON(res, 400, { error: "1-30字" });
+        const card = { id: crypto.randomUUID(), text, created_at: now };
+        group.cards.push(card);
+        writeUserVoiceCards(decoded.id, vc);
+        return sendJSON(res, 200, { card, total: group.cards.length });
+      }
+      return sendJSON(res, 400, { error: "请提供 text 或 texts" });
+    } catch (err) { return sendJSON(res, 500, { error: err.message }); }
+  }
+
+  // DELETE /api/voice-cards/:id — 删除单张卡
+  if (req.method === "DELETE" && req.url.startsWith("/api/voice-cards/") && !req.url.includes("/group/")) {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    const cardId = req.url.split("/api/voice-cards/")[1];
+    let vc = readUserVoiceCards(decoded.id);
+    if (!vc) return sendJSON(res, 404, { error: "无数据" });
+    let found = false;
+    for (const g of vc.groups) {
+      const before = g.cards.length;
+      g.cards = g.cards.filter(c => c.id !== cardId);
+      if (g.cards.length < before) { found = true; break; }
+    }
+    if (!found) return sendJSON(res, 404, { error: "卡片不存在" });
+    writeUserVoiceCards(decoded.id, vc);
+    return sendJSON(res, 200, { deleted: true });
+  }
+
+  // POST /api/voice-cards/group — 新建分组
+  if (req.method === "POST" && req.url === "/api/voice-cards/group") {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    try {
+      const { name } = await parseBody(req);
+      if (!name || !name.trim()) return sendJSON(res, 400, { error: "请输入分组名" });
+      let vc = readUserVoiceCards(decoded.id);
+      if (!vc) { vc = initDefaultVoiceCards(); }
+      if (vc.groups.length >= 10) return sendJSON(res, 400, { error: "最多10个分组" });
+      const group = { id: crypto.randomUUID(), name: name.trim(), cards: [] };
+      vc.groups.push(group);
+      writeUserVoiceCards(decoded.id, vc);
+      return sendJSON(res, 200, { group: { id: group.id, name: group.name, count: 0 } });
+    } catch (err) { return sendJSON(res, 500, { error: err.message }); }
+  }
+
+  // POST /api/voice-cards/mix-text — 开关"混合文字卡"
+  if (req.method === "POST" && req.url === "/api/voice-cards/mix-text") {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    let vc = readUserVoiceCards(decoded.id);
+    if (!vc) { vc = initDefaultVoiceCards(); }
+    vc.mixTextCards = !vc.mixTextCards;
+    writeUserVoiceCards(decoded.id, vc);
+    return sendJSON(res, 200, { mixTextCards: vc.mixTextCards });
+  }
+
+  // POST /api/voice-cards/group/:id/toggle — 开关卡组
+  if (req.method === "POST" && req.url.match(/^\/api\/voice-cards\/group\/[^/]+\/toggle$/)) {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    const groupId = req.url.split("/api/voice-cards/group/")[1].replace("/toggle", "");
+    let vc = readUserVoiceCards(decoded.id);
+    if (!vc) return sendJSON(res, 404, { error: "无数据" });
+    const group = vc.groups.find(g => g.id === groupId);
+    if (!group) return sendJSON(res, 404, { error: "分组不存在" });
+    group.enabled = group.enabled === false ? true : false;
+    writeUserVoiceCards(decoded.id, vc);
+    return sendJSON(res, 200, { enabled: group.enabled });
+  }
+
+  // DELETE /api/voice-cards/group/:id — 删除分组（默认组不可删）
+  if (req.method === "DELETE" && req.url.startsWith("/api/voice-cards/group/")) {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    const groupId = req.url.split("/api/voice-cards/group/")[1];
+    // 所有卡组（含默认）均可删除
+    let vc = readUserVoiceCards(decoded.id);
+    if (!vc) return sendJSON(res, 404, { error: "无数据" });
+    vc.groups = vc.groups.filter(g => g.id !== groupId);
+    writeUserVoiceCards(decoded.id, vc);
+    return sendJSON(res, 200, { deleted: true });
+  }
+
+
+
+
+  // ═══ 来电开场白 ═══
+  const CALL_OPENERS = [
+    // 日常问候
+    "嘿，在干嘛呢",
+    "你好呀，忙不忙",
+    "在吗，想找你聊聊",
+    "刚好有空，打给你",
+    "你现在方便说话吗",
+    "诶，你在哪呢",
+    "吃饭了没有",
+    "今天过得怎么样",
+    "忙完了吗",
+    "下班了没",
+    // 想念类
+    "想你了，就打过来了",
+    "刚刚在想你",
+    "突然好想听你说话",
+    "忍不住给你打电话了",
+    "一个人待着好无聊，想你了",
+    "今天一直在想你",
+    "好久没听到你声音了",
+    "你知不知道我有多想你",
+    "睡不着，想听听你的声音",
+    "刚才梦到你了",
+    // 撒娇类
+    "你猜我为什么打给你",
+    "哼，你怎么都不主动找我",
+    "你是不是把我忘了",
+    "我生气了，你猜为什么",
+    "你再不理我我就……",
+    "我数到三你必须接啊",
+    "终于舍得接了",
+    "等你好久了知不知道",
+    "你是不是背着我干坏事了",
+    "说，想没想我",
+    // 关心类
+    "天气变了，你加衣服了没",
+    "看你今天好像不太开心",
+    "最近是不是太累了",
+    "好好休息了吗",
+    "有没有按时吃饭呀",
+    "你声音听起来还好吗",
+    "别太辛苦了好不好",
+    "多喝点水啊",
+    // 开心/分享类
+    "哎我跟你说个事",
+    "今天遇到一个好好笑的事",
+    "你绝对猜不到我今天干了什么",
+    "我发现了一个好东西",
+    "刚看到一个东西想到你了",
+    "给你讲个有意思的",
+    // 夜晚/睡前
+    "还没睡呢？",
+    "该睡觉了知道吗",
+    "睡前想跟你说声晚安",
+    "夜深了还在忙什么",
+    "打个电话陪你一会儿",
+    "困了吗，我给你讲个故事吧",
+  ];
+
+  // POST /api/incoming-call/opener — AI 选开场白
+  if (req.method === "POST" && req.url === "/api/incoming-call/opener") {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    try {
+      const body = await parseBody(req);
+      const chatId = body.chatId;
+      let history = [];
+      let personaCtx = '';
+
+      // 读聊天记录
+      if (chatId) {
+        const chatDir = path.join(__dirname, 'data', 'wc-chats');
+        const chatFp = path.join(chatDir, decoded.id + '.json');
+        try {
+          const chatFile = JSON.parse(fs.readFileSync(chatFp, 'utf8'));
+          const chat = (chatFile.chats || []).find(c => c.id === chatId);
+          if (chat) {
+            history = (chat.messages || []).slice(-10);
+            // 获取人设
+            if (chat.dreamPersonaId) {
+              personaCtx = await getPersonaContext(decoded.id, null, chat.dreamPersonaId);
+            }
+          }
+        } catch(e) {}
+      }
+
+      // 随机抽 10 句候选
+      const shuffled = [...CALL_OPENERS].sort(() => Math.random() - 0.5);
+      const candidates = shuffled.slice(0, 10);
+      const cardList = candidates.map((c, i) => (i + 1) + ". " + c).join("\n");
+
+      let historyCtx = "";
+      if (history.length > 0) {
+        historyCtx = "\n\n你们最近的对话：\n" + history.map((m, i) => (m.type === "user" ? "对方：" : "你：") + m.text).join("\n");
+      }
+
+      // 获取当前时间信息（用户时区，默认 Asia/Shanghai）
+      const now = new Date();
+      const hourFmt = new Intl.DateTimeFormat('en', { timeZone: 'Asia/Shanghai', hour: 'numeric', hour12: false });
+      const hour = parseInt(hourFmt.format(now));
+      let timeHint = "";
+      if (hour >= 0 && hour < 6) timeHint = "现在是凌晨";
+      else if (hour >= 6 && hour < 9) timeHint = "现在是早上";
+      else if (hour >= 9 && hour < 12) timeHint = "现在是上午";
+      else if (hour >= 12 && hour < 14) timeHint = "现在是中午";
+      else if (hour >= 14 && hour < 18) timeHint = "现在是下午";
+      else if (hour >= 18 && hour < 21) timeHint = "现在是晚上";
+      else timeHint = "现在是深夜";
+
+      const sysPrompt = "你是来电开场白选择器。你主动给对方打电话，对方刚接起来，你要说第一句话。" + (personaCtx || '') +
+        "\n\n规则：" +
+        "\n1. 从候选中选一句最符合你角色性格、当前时间、对话上下文的开场白" +
+        "\n2. 如果候选都不够贴合你的人设，可以基于候选风格自己写一句（≤15字，口语化）" +
+        "\n3. 输出格式：直接输出最终开场白原文（不要编号、不要引号、不要解释）" +
+        "\n4. 语气必须符合你的角色设定——温柔的角色说温柔的话，霸道的角色说霸道的话" +
+        "\n5. 如果对方有名字，可以用名字称呼";
+      const userPrompt = timeHint + "。" + historyCtx + "\n\n候选开场白：\n" + cardList + "\n\n你接通后说的第一句话：";
+
+      const result = await callWithFallback([
+        { role: "system", content: sysPrompt },
+        { role: "user", content: userPrompt }
+      ], 30, "claude-haiku-4-5-20251001");
+
+      // AI 直接输出开场白文本（可能是候选原文，也可能是改写的）
+      let opener = result.content.trim().replace(/^["'""]|["'""]$/g, '').replace(/^\d+\.\s*/, '');
+      if (!opener || opener.length > 30) opener = candidates[0]; // fallback
+
+      return sendJSON(res, 200, { opener });
+    } catch(err) {
+      // fallback：随机选一句
+      const opener = CALL_OPENERS[Math.floor(Math.random() * CALL_OPENERS.length)];
+      return sendJSON(res, 200, { opener });
+    }
+  }
+
+  // POST /api/incoming-call/trigger — 手动触发来电（需登录）
+  if (req.method === "POST" && req.url === "/api/incoming-call/trigger") {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    try {
+      const body = await parseBody(req);
+      const userId = decoded.id;
+      // 找用户最近活跃的聊天
+      const chatDir = path.join(__dirname, 'data', 'wc-chats');
+      const chatFp = path.join(chatDir, userId + '.json');
+      const chatFile = JSON.parse(fs.readFileSync(chatFp, 'utf8'));
+      let targetChat = null;
+      // 如果指定了 chatId 就用指定的，否则用最近的
+      if (body.chatId) {
+        targetChat = (chatFile.chats || []).find(c => c.id === body.chatId);
+      }
+      if (!targetChat) {
+        let latest = 0;
+        for (const c of (chatFile.chats || [])) {
+          const t = c.updatedAt ? new Date(c.updatedAt).getTime() : 0;
+          if (t > latest) { latest = t; targetChat = c; }
+        }
+      }
+      if (!targetChat) return sendJSON(res, 400, { error: '没有聊天记录' });
+
+      const callType = body.callType || 'voice';
+      const callerName = targetChat.dreamPersonaName || 'TA';
+      const callerAvatar = targetChat.dreamPersonaAvatar || '';
+
+      const callData = {
+        status: 'ringing',
+        callType,
+        chatId: targetChat.id,
+        callerName,
+        callerAvatar,
+        createdAt: new Date().toISOString()
+      };
+      const callFp = path.join(INCOMING_CALL_DIR, userId + '.json');
+      fs.writeFileSync(callFp, JSON.stringify(callData));
+      console.log('📞 手动来电:', callerName, '→', userId);
+
+      // 推送通知
+      sendCallPushNotification(userId, callerName, callType, '/?incoming=1', callerAvatar).catch(() => {});
+
+      return sendJSON(res, 200, { ok: true, callerName, callType });
+    } catch(e) {
+      return sendJSON(res, 500, { error: e.message });
+    }
+  }
+
+    // GET /api/incoming-call — 检查是否有来电
+  if (req.method === "GET" && req.url === "/api/incoming-call") {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    try {
+      const callFp = path.join(INCOMING_CALL_DIR, decoded.id + '.json');
+      const callData = JSON.parse(fs.readFileSync(callFp, 'utf8'));
+      if (callData.status === 'ringing') {
+        // 超过 60 秒未接 → 自动变未接
+        if (Date.now() - new Date(callData.createdAt).getTime() > 180000) { // 3分钟超时
+          callData.status = 'missed';
+          fs.writeFileSync(callFp, JSON.stringify(callData));
+          return sendJSON(res, 200, { incoming: false, missed: true, callerName: callData.callerName });
+        }
+        return sendJSON(res, 200, { incoming: true, ...callData });
+      }
+      return sendJSON(res, 200, { incoming: false });
+    } catch(e) {
+      return sendJSON(res, 200, { incoming: false });
+    }
+  }
+
+  // POST /api/incoming-call/answer — 接听
+  if (req.method === "POST" && req.url === "/api/incoming-call/answer") {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    try {
+      const callFp = path.join(INCOMING_CALL_DIR, decoded.id + '.json');
+      const callData = JSON.parse(fs.readFileSync(callFp, 'utf8'));
+      callData.status = 'answered';
+      fs.writeFileSync(callFp, JSON.stringify(callData));
+      return sendJSON(res, 200, { ok: true, callType: callData.callType, chatId: callData.chatId });
+    } catch(e) { return sendJSON(res, 200, { ok: false }); }
+  }
+
+  // POST /api/incoming-call/reject — 拒接
+  if (req.method === "POST" && req.url === "/api/incoming-call/reject") {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    try {
+      const callFp = path.join(INCOMING_CALL_DIR, decoded.id + '.json');
+      const callData = JSON.parse(fs.readFileSync(callFp, 'utf8'));
+      callData.status = 'rejected';
+      fs.writeFileSync(callFp, JSON.stringify(callData));
+      return sendJSON(res, 200, { ok: true });
+    } catch(e) { return sendJSON(res, 200, { ok: false }); }
+  }
+
+  // ═══ 默认字卡池系统（分组，per-user） ═══
+  const WORD_POOLS_DIR = path.join(__dirname, "data", "word-pools");
+  const POOL_NAMES = {"scenes":"场景","time":"时间","dreams":"梦境","clothing":"穿着","food":"食物","body":"身体感觉","eating":"吃喝动作","daily":"日常动作","love":"恋爱表达","fearSad":"害怕伤心","happy":"开心","coming":"来去动作","simplePos":"正面简词","simpleNeg":"负面简词","emoji":"表情符号","petNames":"称呼","intimate":"亲密动作","care":"关心","meta":"对话相关","jealous":"吃醋","banter":"调侃玩笑","cuddly":"撒娇","surrender":"服软","comfort":"安慰","lovebabble":"情话","missyou":"想念","stickySweet":"黏黏甜甜","possessive":"占有欲","sweetDaily":"甜蜜日常","confess":"表白","goofyCute":"搞怪可爱","worryCare":"担心关怀","apology":"道歉","sadUpset":"难过"};
+
+  function readUserWordPools(userId) {
+    const fp = path.join(WORD_POOLS_DIR, userId + ".json");
+    try { return JSON.parse(fs.readFileSync(fp, "utf8")); }
+    catch { return null; }
+  }
+
+  function writeUserWordPools(userId, data) {
+    fs.mkdirSync(WORD_POOLS_DIR, { recursive: true });
+    fs.writeFileSync(path.join(WORD_POOLS_DIR, userId + ".json"), JSON.stringify(data));
+  }
+
+  // GET /api/word-pools — 获取用户字卡池
+  if (req.method === "GET" && req.url === "/api/word-pools") {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    const data = readUserWordPools(decoded.id);
+    if (!data) return sendJSON(res, 200, { groups: null }); // 未初始化
+    return sendJSON(res, 200, data);
+  }
+
+  // POST /api/word-pools/init — 从客户端 _POOLS 初始化
+  if (req.method === "POST" && req.url === "/api/word-pools/init") {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    const existing = readUserWordPools(decoded.id);
+    if (existing) return sendJSON(res, 200, { ok: true, msg: "already initialized" });
+    try {
+      const body = await parseBody(req);
+      if (!body.groups || !Array.isArray(body.groups)) return sendJSON(res, 400, { error: "需要 groups" });
+      writeUserWordPools(decoded.id, { groups: body.groups });
+      return sendJSON(res, 200, { ok: true });
+    } catch(err) { return sendJSON(res, 500, { error: err.message }); }
+  }
+
+  // POST /api/word-pools/card — 添加卡片到指定组（单条或批量）
+  if (req.method === "POST" && req.url === "/api/word-pools/card") {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    try {
+      const body = await parseBody(req);
+      let wp = readUserWordPools(decoded.id);
+      if (!wp) return sendJSON(res, 404, { error: "未初始化" });
+      const groupId = body.groupId;
+      const group = wp.groups.find(g => g.id === groupId);
+      if (!group) return sendJSON(res, 404, { error: "分组不存在" });
+      const now = new Date().toISOString();
+      if (body.texts && Array.isArray(body.texts)) {
+        const newCards = body.texts.map(t => (t||"").trim()).filter(t => t.length > 0 && t.length <= 20)
+          .map(t => ({ id: crypto.randomUUID(), text: t, created_at: now }));
+        group.cards.push(...newCards);
+        writeUserWordPools(decoded.id, wp);
+        return sendJSON(res, 200, { added: newCards.length, total: group.cards.length });
+      } else if (body.text) {
+        const text = body.text.trim();
+        if (!text || text.length > 20) return sendJSON(res, 400, { error: "1-20字" });
+        const card = { id: crypto.randomUUID(), text, created_at: now };
+        group.cards.push(card);
+        writeUserWordPools(decoded.id, wp);
+        return sendJSON(res, 200, { card, total: group.cards.length });
+      }
+      return sendJSON(res, 400, { error: "请提供 text 或 texts" });
+    } catch(err) { return sendJSON(res, 500, { error: err.message }); }
+  }
+
+  // DELETE /api/word-pools/card/:id — 删除单张卡
+  if (req.method === "DELETE" && req.url.startsWith("/api/word-pools/card/")) {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    const cardId = req.url.split("/api/word-pools/card/")[1];
+    let wp = readUserWordPools(decoded.id);
+    if (!wp) return sendJSON(res, 404, { error: "无数据" });
+    let found = false;
+    for (const g of wp.groups) {
+      const before = g.cards.length;
+      g.cards = g.cards.filter(c => c.id !== cardId);
+      if (g.cards.length < before) { found = true; break; }
+    }
+    if (!found) return sendJSON(res, 404, { error: "卡片不存在" });
+    writeUserWordPools(decoded.id, wp);
+    return sendJSON(res, 200, { deleted: true });
+  }
+
+  // POST /api/word-pools/group — 新建分组
+  if (req.method === "POST" && req.url === "/api/word-pools/group") {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    try {
+      const body = await parseBody(req);
+      const name = (body.name || "").trim();
+      if (!name) return sendJSON(res, 400, { error: "需要名称" });
+      let wp = readUserWordPools(decoded.id);
+      if (!wp) wp = { groups: [] };
+      const group = { id: crypto.randomUUID(), name, enabled: true, cards: [] };
+      wp.groups.push(group);
+      writeUserWordPools(decoded.id, wp);
+      return sendJSON(res, 200, { group: { id: group.id, name: group.name } });
+    } catch(err) { return sendJSON(res, 500, { error: err.message }); }
+  }
+
+  // DELETE /api/word-pools/group/:id — 删除分组
+  if (req.method === "DELETE" && req.url.startsWith("/api/word-pools/group/") && !req.url.includes("/toggle")) {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    const groupId = req.url.split("/api/word-pools/group/")[1];
+    let wp = readUserWordPools(decoded.id);
+    if (!wp) return sendJSON(res, 404, { error: "无数据" });
+    wp.groups = wp.groups.filter(g => g.id !== groupId);
+    writeUserWordPools(decoded.id, wp);
+    return sendJSON(res, 200, { deleted: true });
+  }
+
+  // POST /api/word-pools/group/:id/toggle — 开关分组
+  if (req.method === "POST" && req.url.match(/^\/api\/word-pools\/group\/[^/]+\/toggle$/)) {
+    const decoded = verifyToken(req);
+    if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+    const groupId = req.url.split("/api/word-pools/group/")[1].replace("/toggle", "");
+    let wp = readUserWordPools(decoded.id);
+    if (!wp) return sendJSON(res, 404, { error: "无数据" });
+    const group = wp.groups.find(g => g.id === groupId);
+    if (!group) return sendJSON(res, 404, { error: "分组不存在" });
+    group.enabled = group.enabled === false ? true : false;
+    writeUserWordPools(decoded.id, wp);
+    return sendJSON(res, 200, { enabled: group.enabled });
+  }
+
+
+      // === 表情包系统（分组） ===
   const STICKERS_DIR = path.join(__dirname, "data", "wc-stickers");
 
   function readUserStickers(userId) {
@@ -2922,7 +3949,7 @@ const server = http.createServer(async (req, res) => {
     // === 传讯字卡 AI 选池（关键词未命中时）===
   if (req.method === "POST" && req.url === "/api/word-cards/select-pools") {
     try {
-      const { question, history, keywordHint } = await parseBody(req);
+      const { question, history, keywordHint, selfId: spSelfId, dreamId: spDreamId } = await parseBody(req);
       if (!question) {
         sendJSON(res, 400, { error: "no question" });
         return;
@@ -2943,7 +3970,7 @@ clothing — 穿着（外套、围巾、衬衫……）
 food — 食物（咖啡、草莓、巧克力……）
 body — 身体感觉（手凉、心跳、呼吸……）
 eating — 吃饭相关（吃了、还没吃、饿了……）
-daily — 日常对话（在的、干嘛呢、等你呢……）
+daily — 日常状态（在发呆、在走路、在听歌……仅当对方问在干嘛时选，其他情况不选）
 love — 爱意表达（喜欢你、想你了、心动……）
 fearSad — 恐惧和难过（有点怕、停住了、忍住了……）
 happy — 开心（笑了、真好、开心……）
@@ -2956,25 +3983,38 @@ intimate — 亲密（抱抱、靠近一点……）
 care — 关心（多喝水、早点睡……）
 meta — 元表达（说不出口、写了又删……）
 jealous — 吃醋（你跟谁说话呢、哼……）
-banter — 拌嘴（讨厌、你好烦……）`;
-      const sysPrompt = "你是传讯字卡的分类器。对方说了一句话，你需要根据对话上下文判断，从卡池列表中选 2-3 个最相关的池子，让系统从这些池子里抽卡。\n\n" + poolDesc + "\n\n规则：\n- 只输出池子名（英文），逗号分隔\n- 选 2-3 个最相关的\n- 结合上下文理解对方想表达什么\n- 如果是追问具体事物，选能回应的池子";
+banter — 拌嘴逗趣（讨厌、你好烦、反对无效……）
+cuddly — 撒娇贴贴（宝宝过来、老婆贴贴……）
+missyou — 想念（我想你了、想你了宝宝……）
+sweetDaily — 甜蜜日常（你在干嘛呢、宝宝你在干什么呀……）
+confess — 告白（我爱你老婆、求求你喜欢我……）
+worryCare — 担心宠溺（我在乎你、原来我还没有失宠……）
+comfort — 哄人安抚（不哭不哭、先让我抱住你……）
+sadUpset — 难过委屈（有点难过、有点伤心……）`;
+      const spDecoded = verifyToken(req);
+      const spPersonaCtx = spDecoded ? await getPersonaContext(spDecoded.id, spSelfId, spDreamId) : '';
+      const sysPrompt = "你是传讯字卡的分类器。你扮演的是对方的虚拟恋人。对方说了一句话，你要站在恋人的角度理解对方想要什么回应，然后从卡池列表中选 2-3 个最相关的池子。\n\n关键判断（按优先级）：\n- 对方追问具体事物（什么电影/叫什么名字/哪首歌/去了哪里/吃的什么菜）→ 输出 NONE\n- 对方问需要具体信息才能回答的问题（几点了/多少钱/什么时候）→ 输出 NONE\n- 对方问是非题 → 必选 simplePos 或 simpleNeg\n- 对方明确问在干嘛/你在做什么 → 选 daily（仅此情况选daily）\n- 对方表达想念/爱意 → 选 love、missyou、intimate 等\n- 对方撒娇/求关注 → 选 cuddly、sweetDaily\n- 对方难过/不开心 → 选 comfort、care\n\n" + poolDesc + "\n\n规则：\n- 输出池子名逗号分隔，或输出 NONE\n- 选 2-3 个最相关的\n- 追问具体事物或需要具体信息回答时输出 NONE\n- 不确定选什么时输出 NONE，不要默认选 daily";
       const userPrompt = (historyCtx ? historyCtx + "\n\n" : "") + hintCtx + "\n\n对方最新说：" + question + "\n\n选 2-3 个最相关的卡池（只写英文池名，逗号分隔）：";
       const messages = [
-        { role: "system", content: sysPrompt },
+        { role: "system", content: sysPrompt + (spPersonaCtx || '') },
         { role: "user", content: userPrompt }
       ];
       const result = await callWithFallback(messages, 50, "claude-haiku-4-5-20251001");
       const raw = result.content.trim();
-      const validPools = ["scenes","time","dreams","clothing","food","body","eating","daily","love","fearSad","happy","coming","simplePos","simpleNeg","emoji","petNames","intimate","care","meta","jealous","banter"];
+      const validPools = ["scenes","time","dreams","clothing","food","body","eating","daily","love","fearSad","happy","coming","simplePos","simpleNeg","emoji","petNames","intimate","care","meta","jealous","banter","cuddly","missyou","sweetDaily","confess","worryCare","comfort","sadUpset"];
+      if (raw.trim().toUpperCase() === "NONE") {
+        sendJSON(res, 200, { pools: [], none: true });
+        return;
+      }
       const pools = raw.split(/[,，\s]+/).map(s => s.trim()).filter(s => validPools.includes(s));
       if (pools.length === 0) {
-        sendJSON(res, 200, { pools: ["daily", "meta"] });
+        sendJSON(res, 200, { pools: [], none: true });
       } else {
         sendJSON(res, 200, { pools: pools.slice(0, 3) });
       }
     } catch (err) {
       console.error("Word card select-pools error:", err.message);
-      sendJSON(res, 200, { pools: ["daily", "meta"] });
+      sendJSON(res, 200, { pools: [], none: true });
     }
     return;
   }
@@ -2982,9 +4022,12 @@ banter — 拌嘴（讨厌、你好烦……）`;
     // === 传讯字卡 AI 筛选 ===
   if (req.method === "POST" && req.url === "/api/word-cards/filter") {
     try {
-      const { question, candidates, history } = await parseBody(req);
+      const { question, candidates, history, selfId: fSelfId, dreamId: fDreamId } = await parseBody(req);
+      const fDecoded = verifyToken(req);
+      const fPersonaCtx = fDecoded ? await getPersonaContext(fDecoded.id, fSelfId, fDreamId) : '';
       if (!candidates || candidates.length === 0) {
-        sendJSON(res, 400, { error: "no candidates" });
+        // 自由组字暂时关闭，返回 none 让前端换一批
+        sendJSON(res, 200, { none: true });
         return;
       }
       const texts = candidates.map(c => typeof c === "string" ? c : c.text);
@@ -2998,15 +4041,21 @@ banter — 拌嘴（讨厌、你好烦……）`;
       if (history && history.length > 0) {
         historyCtx = "\n\n对话上下文（从旧到新，序号从0开始）：\n" + history.map((m, i) => "[" + i + "] " + (m.type === "user" ? "对方：" : "你：") + m.text).join("\n");
       }
-      const sysPrompt = "你是传讯字卡的筛选器。你扮演的是「回卡片的那个人」。对方说了一句话，系统抽了一些候选卡片，你要挑出最搭的卡来回应。\n\n重要：结合对话上下文选卡。如果对方在追问或接话，选能接上话题的卡，不要选跟当前话题无关的。\n\nNONE 规则（严格执行）：\n如果对方在追问具体的东西（比如「什么电影」「叫什么」「哪首歌」），而候选卡里没有任何一张能回答这个具体问题，你必须回复 NONE。不要用氛围卡或不相关的卡凑数。回复 NONE 比硬选一张不搭的卡更好。\n\n张数判断：\n- 问在哪/位置/天气 → 1张\n- 简单是否问题 → 1张\n- 日常问候/聊天 → 1-2张\n- 情感/想念/喜欢 → 2-3张\n- 复杂长问句 → 2-3张\n\n引用规则（像微信引用消息一样）：\n- 如果你选的卡片是在回应对话上下文中某条特定的消息（不是最新那条），在末尾加 [Q:序号]\n- 序号是对话上下文列表里的行号（从0开始）\n- 大多数时候不需要引用（直接回应最新消息时不加）\n- 只有当你的卡片明确是在回应上文中某条旧消息时才引用\n- 示例：对方先说了「好困」，又说了「要出门了」，你选的卡是「早点睡」→ 这是回应「好困」→ 加 [Q:对应序号]\n\n规则：\n- 先输出卡片文字（逗号分隔），如需引用在末尾加 [Q:序号]\n- 如果都不搭，只输出 NONE（这很重要，宁缺毋滥）\n- 优先选能直接回应问题的卡\n- 标了[氛围]的是场景/地点卡，一般不选\n- 不要选明显不搭的组合";
+      const sysPrompt = "你是传讯字卡的筛选器。你扮演的是对方心中的虚拟恋人，情侣关系，深爱着对方。\n\n性格：主动关心、带爱意、有真实情绪（吃醋/委屈/生气）、回答合逻辑不要答非所问。\n\n重要：结合上下文选卡。追问接话时选能接上话题的卡。\n\n候选卡不搭时两个选择：\n1. NONE — 换一批\n2. FREE:你想说的话 — 自由组字（最多6字纯汉字无标点emoji）\n\n必须用FREE：追问具体事物候选卡答不了、情绪急切反复追问。FREE风格：碎片感、口语、不超过6字、像真人随手打的。好例子：FREE:吃面了、FREE:嗯看了、FREE:你猜呀、FREE:没有诶、FREE:想你。坏例子（禁止）：FREE:昨晚吃的炸鸡想起你了（太长太流畅太AI）\n\n张数：问位置/是否→1张 日常→1-2张 情感→2-3张\n\n引用：选完卡末尾加[Q:序号]（从0开始），只引用对方说的话（上下文中标记为 对方：的消息），不要引用你自己说的话（标记为 你：的消息）。\n\n规则：卡片文字逗号分隔+[Q:序号]、不搭就FREE或NONE、优先回应问题、氛围卡一般不选、同类句式只选1张";
       const userPrompt = (historyCtx ? historyCtx + "\n\n" : "") + "对方最新说：" + question + "\n\n候选卡片：\n" + cardList + "\n\n选出最搭的（卡片文字逗号分隔，如需引用旧消息在末尾加[Q:序号]）：";
       const messages = [
-        { role: "system", content: sysPrompt },
+        { role: "system", content: sysPrompt + (fPersonaCtx || '') },
         { role: "user", content: userPrompt }
       ];
       const result = await callWithFallback(messages, 100, "claude-haiku-4-5-20251001");
       let raw = result.content.trim();
       // AI 认为候选都不搭
+      // FREE mode — 暂时关闭，当作 NONE
+      const freeMatch = raw.match(/^FREE[:：](.+)$/i);
+      if (freeMatch) {
+        sendJSON(res, 200, { cards: [], none: true });
+        return;
+      }
       if (raw === "NONE" || raw === "none") {
         sendJSON(res, 200, { cards: [], none: true });
         return;
@@ -3025,7 +4074,14 @@ banter — 拌嘴（讨厌、你好烦……）`;
       } else {
         resp.cards = selected.slice(0, 3);
       }
-      if (quoteIndex !== null) resp.quoteIndex = quoteIndex;
+      // 只允许引用对方的消息，不引用自己的
+      if (quoteIndex !== null && history && history.length > 0) {
+        const qi = quoteIndex;
+        if (qi >= 0 && qi < history.length && history[qi].type === 'user') {
+          resp.quoteIndex = quoteIndex;
+        }
+        // reply 类型的消息不引用，直接丢弃 quoteIndex
+      }
       sendJSON(res, 200, resp);
     } catch (err) {
       console.error("Word card filter error:", err.message);
@@ -3037,10 +4093,12 @@ banter — 拌嘴（讨厌、你好烦……）`;
   // API endpoint
   if (req.method === 'POST' && req.url === '/api/letter') {
     try {
-      const { words, style, userMessage } = await parseBody(req);
+      const { words, style, userMessage, selfId, dreamId } = await parseBody(req);
       recordHit('letter');
+      const decoded = verifyToken(req);
+      const personaCtx = decoded ? await getPersonaContext(decoded.id, selfId, dreamId) : '';
       const prompt = generatePrompt(words, style, userMessage);
-      const result = await callAPI(prompt);
+      const result = await callAPI(prompt, personaCtx);
       const letter = parseLetter(result.content);
       sendJSON(res, 200, { body: letter.body, closing: letter.closing, model: result.model });
     } catch (err) {
@@ -3084,7 +4142,306 @@ banter — 拌嘴（讨厌、你好烦……）`;
     return;
   }
 
+
+  // === 档案系统 API ===
+  const personaIdMatch = req.url.match(/^\/api\/persona\/([0-9a-f-]+)$/);
+  const pairingMatch2 = req.url.match(/^\/api\/pairing\/([0-9a-f-]+)$/);
+  const pairingActivateMatch = req.url.match(/^\/api\/pairing\/([0-9a-f-]+)\/activate$/);
+
+  // POST /api/persona
+  if (req.method === "POST" && req.url === "/api/persona") {
+    try {
+      const decoded = verifyToken(req);
+      if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+      const body = await parseBody(req);
+      if (!body.name || !body.name.trim()) return sendJSON(res, 400, { error: "角色名不能为空" });
+      const { count } = await supabase.from("personas").select("id", { count: "exact", head: true }).eq("user_id", decoded.id);
+      if (count >= 10) return sendJSON(res, 400, { error: "最多创建 10 个角色" });
+      const { data: persona, error } = await supabase.from("personas").insert({
+        user_id: decoded.id,
+        type: body.type === "dream_role" ? "dream_role" : "self",
+        name: body.name.trim().slice(0, 30),
+        personality: (body.personality || "").trim().slice(0, 200),
+        summary: (body.summary || "").trim().slice(0, 100),
+        age: body.age || null,
+        color: (body.color || "").trim().slice(0, 20),
+        height: (body.height || "").trim().slice(0, 20),
+        extra: (body.extra || "").trim().slice(0, 500),
+        occupation: (body.occupation || "").trim().slice(0, 50),
+        identity: (body.identity || "").trim().slice(0, 50),
+        eye_color: (body.eye_color || "").trim().slice(0, 20),
+        hair_color: (body.hair_color || "").trim().slice(0, 20),
+        source: (body.source || "").trim().slice(0, 100),
+        relationship: (body.relationship || "").trim().slice(0, 100),
+        tags: (body.tags || "").trim().slice(0, 200),
+        attributes: body.attributes || {},
+      }).select().single();
+      if (error) throw error;
+      return sendJSON(res, 201, { persona });
+    } catch (e) { console.error("POST /api/persona error:", e); return sendJSON(res, 500, { error: "创建失败" }); }
+  }
+
+  // GET /api/personas
+  if (req.method === "GET" && req.url === "/api/personas") {
+    try {
+      const decoded = verifyToken(req);
+      if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+      const { data: personas, error } = await supabase.from("personas").select("*").eq("user_id", decoded.id).order("created_at", { ascending: true });
+      if (error) throw error;
+      const enriched = (personas || []).map(p => ({ ...p, ...getPersonaImageUrls(p.id) }));
+      return sendJSON(res, 200, { personas: enriched });
+    } catch (e) { console.error("GET /api/personas error:", e); return sendJSON(res, 500, { error: "获取失败" }); }
+  }
+
+  // PUT /api/persona/:id
+  if (req.method === "PUT" && personaIdMatch) {
+    try {
+      const personaId = personaIdMatch[1];
+      const decoded = verifyToken(req);
+      if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+      const { data: existing } = await supabase.from("personas").select("id").eq("id", personaId).eq("user_id", decoded.id).single();
+      if (!existing) return sendJSON(res, 404, { error: "角色不存在" });
+      const body = await parseBody(req);
+      const updates = {};
+      if (body.name !== undefined) updates.name = body.name.trim().slice(0, 30);
+      if (body.personality !== undefined) updates.personality = body.personality.trim().slice(0, 200);
+      if (body.summary !== undefined) updates.summary = body.summary.trim().slice(0, 100);
+      if (body.type !== undefined) updates.type = body.type === "dream_role" ? "dream_role" : "self";
+      if (body.age !== undefined) updates.age = body.age;
+      if (body.color !== undefined) updates.color = body.color.trim().slice(0, 20);
+      if (body.height !== undefined) updates.height = body.height.trim().slice(0, 20);
+      if (body.extra !== undefined) updates.extra = body.extra.trim().slice(0, 500);
+      if (body.occupation !== undefined) updates.occupation = (body.occupation || "").trim().slice(0, 50);
+      if (body.identity !== undefined) updates.identity = (body.identity || "").trim().slice(0, 50);
+      if (body.eye_color !== undefined) updates.eye_color = (body.eye_color || "").trim().slice(0, 20);
+      if (body.hair_color !== undefined) updates.hair_color = (body.hair_color || "").trim().slice(0, 20);
+      if (body.source !== undefined) updates.source = (body.source || "").trim().slice(0, 100);
+      if (body.relationship !== undefined) updates.relationship = (body.relationship || "").trim().slice(0, 100);
+      if (body.tags !== undefined) updates.tags = (body.tags || "").trim().slice(0, 200);
+      if (body.attributes !== undefined) updates.attributes = body.attributes || {};
+      if (Object.keys(updates).length === 0) return sendJSON(res, 400, { error: "没有要更新的字段" });
+      updates.updated_at = new Date().toISOString();
+      const { data: persona, error } = await supabase.from("personas").update(updates).eq("id", personaId).eq("user_id", decoded.id).select().single();
+      if (error) throw error;
+      return sendJSON(res, 200, { persona });
+    } catch (e) { console.error("PUT /api/persona error:", e); return sendJSON(res, 500, { error: "更新失败" }); }
+  }
+
+
+  // POST /api/persona/:id/image
+  if (req.method === "POST" && req.url.match(/^\/api\/persona\/[0-9a-f-]+\/image$/)) {
+    try {
+      const personaId = req.url.match(/\/api\/persona\/([0-9a-f-]+)\/image/)[1];
+      const decoded = verifyToken(req);
+      if (!decoded) return sendJSON(res, 401, { error: "\u672a\u767b\u5f55" });
+      const { data: existing } = await supabase.from("personas").select("id").eq("id", personaId).eq("user_id", decoded.id).single();
+      if (!existing) return sendJSON(res, 404, { error: "\u89d2\u8272\u4e0d\u5b58\u5728" });
+      const body = await parseBody(req, 12582912);
+      const slot = body.slot === "illust" ? "illust" : "avatar";
+      if (!body.image || typeof body.image !== "string") return sendJSON(res, 400, { error: "\u7f3a\u5c11\u56fe\u7247\u6570\u636e" });
+      const match = body.image.match(/^data:image\/(\w+);base64,(.+)$/);
+      if (!match) return sendJSON(res, 400, { error: "\u56fe\u7247\u683c\u5f0f\u65e0\u6548" });
+      let ext = match[1] === "jpeg" ? "jpg" : match[1];
+      if (!["jpg","png","webp","gif"].includes(ext)) ext = "jpg";
+      const buf = Buffer.from(match[2], "base64");
+      if (buf.length > 8 * 1024 * 1024) return sendJSON(res, 400, { error: "\u56fe\u7247\u4e0d\u80fd\u8d85\u8fc7 8MB" });
+      const uploadsDir = path.join(__dirname, "uploads", "personas");
+      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+      const suffix = personaId + "_" + slot;
+      ["jpg","png","webp","gif"].forEach(e => {
+        try { fs.unlinkSync(path.join(uploadsDir, suffix + "." + e)); } catch(_) {}
+      });
+      const compressed = await sharp(buf).resize({ width: 800, height: 1200, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 82 }).toBuffer();
+      const filePath = path.join(uploadsDir, suffix + ".jpg");
+      fs.writeFileSync(filePath, compressed);
+      return sendJSON(res, 200, { image_url: "/uploads/personas/" + suffix + ".jpg", slot });
+    } catch(e) { console.error("POST persona image error:", e); return sendJSON(res, 500, { error: "\u4e0a\u4f20\u5931\u8d25" }); }
+  }
+
+  // DELETE /api/persona/:id
+  if (req.method === "DELETE" && personaIdMatch) {
+    try {
+      const personaId = personaIdMatch[1];
+      const decoded = verifyToken(req);
+      if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+      const { data: existing } = await supabase.from("personas").select("id").eq("id", personaId).eq("user_id", decoded.id).single();
+      if (!existing) return sendJSON(res, 404, { error: "角色不存在" });
+      await supabase.from("pairings").delete().eq("user_id", decoded.id).or("self_persona_id.eq." + personaId + ",dream_persona_id.eq." + personaId);
+      const { error } = await supabase.from("personas").delete().eq("id", personaId).eq("user_id", decoded.id);
+      if (error) throw error;
+      return sendJSON(res, 200, { message: "角色已删除" });
+    } catch (e) { console.error("DELETE /api/persona error:", e); return sendJSON(res, 500, { error: "删除失败" }); }
+  }
+
+  // POST /api/pairing
+  if (req.method === "POST" && req.url === "/api/pairing") {
+    try {
+      const decoded = verifyToken(req);
+      if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+      const body = await parseBody(req);
+      if (!body.self_persona_id || !body.dream_persona_id) return sendJSON(res, 400, { error: "需要选择自设和梦角" });
+      if (body.self_persona_id === body.dream_persona_id) return sendJSON(res, 400, { error: "自设和梦角不能是同一个角色" });
+      const { data: personas } = await supabase.from("personas").select("id, type").eq("user_id", decoded.id).in("id", [body.self_persona_id, body.dream_persona_id]);
+      if (!personas || personas.length !== 2) return sendJSON(res, 400, { error: "角色不存在" });
+      const { count } = await supabase.from("pairings").select("id", { count: "exact", head: true }).eq("user_id", decoded.id);
+      if (count >= 10) return sendJSON(res, 400, { error: "最多创建 10 个配对" });
+      const { data: pairing, error } = await supabase.from("pairings").insert({
+        user_id: decoded.id,
+        self_persona_id: body.self_persona_id,
+        dream_persona_id: body.dream_persona_id,
+        relationship: (body.relationship || "恋人").trim().slice(0, 30),
+        dynamic: (body.dynamic || "").trim().slice(0, 300),
+        self_nickname: (body.self_nickname || "").trim().slice(0, 20),
+        dream_nickname: (body.dream_nickname || "").trim().slice(0, 20),
+        is_active: false,
+      }).select().single();
+      if (error) throw error;
+      return sendJSON(res, 201, { pairing });
+    } catch (e) { console.error("POST /api/pairing error:", e); return sendJSON(res, 500, { error: "创建失败" }); }
+  }
+
+  // GET /api/pairings
+  if (req.method === "GET" && req.url === "/api/pairings") {
+    try {
+      const decoded = verifyToken(req);
+      if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+      const { data: pairings, error } = await supabase.from("pairings").select("*, self_persona:self_persona_id(*), dream_persona:dream_persona_id(*)").eq("user_id", decoded.id).order("created_at", { ascending: true });
+      if (error) throw error;
+      return sendJSON(res, 200, { pairings });
+    } catch (e) { console.error("GET /api/pairings error:", e); return sendJSON(res, 500, { error: "获取失败" }); }
+  }
+
+  // PUT /api/pairing/:id
+  if (req.method === "PUT" && pairingMatch2) {
+    try {
+      const pairingId = pairingMatch2[1];
+      const decoded = verifyToken(req);
+      if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+      const { data: existing } = await supabase.from("pairings").select("id").eq("id", pairingId).eq("user_id", decoded.id).single();
+      if (!existing) return sendJSON(res, 404, { error: "配对不存在" });
+      const body = await parseBody(req);
+      const updates = {};
+      if (body.relationship !== undefined) updates.relationship = body.relationship.trim().slice(0, 30);
+      if (body.dynamic !== undefined) updates.dynamic = body.dynamic.trim().slice(0, 300);
+      if (body.self_nickname !== undefined) updates.self_nickname = body.self_nickname.trim().slice(0, 20);
+      if (body.dream_nickname !== undefined) updates.dream_nickname = body.dream_nickname.trim().slice(0, 20);
+      if (body.self_persona_id !== undefined) updates.self_persona_id = body.self_persona_id;
+      if (body.dream_persona_id !== undefined) updates.dream_persona_id = body.dream_persona_id;
+      if (Object.keys(updates).length === 0) return sendJSON(res, 400, { error: "没有要更新的字段" });
+      if (updates.self_persona_id || updates.dream_persona_id) {
+        const idsToCheck = [updates.self_persona_id, updates.dream_persona_id].filter(Boolean);
+        const { data: owned } = await supabase.from("personas").select("id").eq("user_id", decoded.id).in("id", idsToCheck);
+        if (!owned || owned.length !== idsToCheck.length) return sendJSON(res, 400, { error: "角色不存在" });
+      }
+      updates.updated_at = new Date().toISOString();
+      const { data: pairing, error } = await supabase.from("pairings").update(updates).eq("id", pairingId).eq("user_id", decoded.id).select().single();
+      if (error) throw error;
+      return sendJSON(res, 200, { pairing });
+    } catch (e) { console.error("PUT /api/pairing error:", e); return sendJSON(res, 500, { error: "更新失败" }); }
+  }
+
+  // DELETE /api/pairing/:id
+  if (req.method === "DELETE" && pairingMatch2) {
+    try {
+      const pairingId = pairingMatch2[1];
+      const decoded = verifyToken(req);
+      if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+      const { data: existing } = await supabase.from("pairings").select("id").eq("id", pairingId).eq("user_id", decoded.id).single();
+      if (!existing) return sendJSON(res, 404, { error: "配对不存在" });
+      const { error } = await supabase.from("pairings").delete().eq("id", pairingId).eq("user_id", decoded.id);
+      if (error) throw error;
+      return sendJSON(res, 200, { message: "配对已删除" });
+    } catch (e) { console.error("DELETE /api/pairing error:", e); return sendJSON(res, 500, { error: "删除失败" }); }
+  }
+
+  // POST /api/pairing/:id/activate
+  if (req.method === "POST" && pairingActivateMatch) {
+    try {
+      const pairingId = pairingActivateMatch[1];
+      const decoded = verifyToken(req);
+      if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+      const { data: existing } = await supabase.from("pairings").select("id").eq("id", pairingId).eq("user_id", decoded.id).single();
+      if (!existing) return sendJSON(res, 404, { error: "配对不存在" });
+      await supabase.from("pairings").update({ is_active: false, updated_at: new Date().toISOString() }).eq("user_id", decoded.id);
+      const { data: pairing, error } = await supabase.from("pairings").update({ is_active: true, updated_at: new Date().toISOString() }).eq("id", pairingId).eq("user_id", decoded.id).select().single();
+      if (error) throw error;
+      return sendJSON(res, 200, { pairing, message: "已切换当前配对" });
+    } catch (e) { console.error("POST /api/pairing/activate error:", e); return sendJSON(res, 500, { error: "激活失败" }); }
+  }
+
+  // GET /api/pairing/active
+  if (req.method === "GET" && req.url === "/api/pairing/active") {
+    try {
+      const decoded = verifyToken(req);
+      if (!decoded) return sendJSON(res, 401, { error: "未登录" });
+      const { data: pairing } = await supabase.from("pairings").select("*, self_persona:self_persona_id(*), dream_persona:dream_persona_id(*)").eq("user_id", decoded.id).eq("is_active", true).single();
+      return sendJSON(res, 200, { pairing: pairing || null });
+    } catch (e) { console.error("GET /api/pairing/active error:", e); return sendJSON(res, 500, { error: "获取失败" }); }
+  }
+
+
   // 静态文件
+  
+  // ─── POST /api/push/subscribe — 保存推送订阅 ───
+  if (req.method === 'POST' && req.url === '/api/push/subscribe') {
+    try {
+      const body = await parseBody(req);
+      if (!body.subscription || !body.subscription.endpoint) {
+        return sendJSON(res, 400, { error: '无效订阅' });
+      }
+      const userId = body.userId || 'anonymous';
+      if (!pushSubscriptions[userId]) pushSubscriptions[userId] = [];
+      const exists = pushSubscriptions[userId].some(s => s.endpoint === body.subscription.endpoint);
+      if (!exists) {
+        pushSubscriptions[userId].push(body.subscription);
+        savePushSubs();
+      }
+      return sendJSON(res, 200, { ok: true });
+    } catch(e) {
+      console.error('push/subscribe error:', e);
+      return sendJSON(res, 500, { error: '订阅失败' });
+    }
+  }
+
+  // ─── POST /api/push/unsubscribe — 取消推送订阅 ───
+  if (req.method === 'POST' && req.url === '/api/push/unsubscribe') {
+    try {
+      const body = await parseBody(req);
+      if (!body.endpoint) return sendJSON(res, 400, { error: '无效' });
+      for (const uid in pushSubscriptions) {
+        pushSubscriptions[uid] = pushSubscriptions[uid].filter(s => s.endpoint !== body.endpoint);
+        if (pushSubscriptions[uid].length === 0) delete pushSubscriptions[uid];
+      }
+      savePushSubs();
+      return sendJSON(res, 200, { ok: true });
+    } catch(e) {
+      return sendJSON(res, 500, { error: '取消失败' });
+    }
+  }
+
+  // ─── POST /api/push/test — 测试推送（发给所有订阅者）───
+  if (req.method === 'POST' && req.url === '/api/push/test') {
+    try {
+      const body = await parseBody(req);
+      const title = body.title || '泡沫来信';
+      const msg = body.body || '这是一条测试通知';
+      let count = 0;
+      for (const uid in pushSubscriptions) {
+        await sendPushNotification(uid, title, msg, '/');
+        count++;
+      }
+      return sendJSON(res, 200, { ok: true, sent: count });
+    } catch(e) {
+      console.error('push test error:', e);
+      return sendJSON(res, 500, { error: '测试失败' });
+    }
+  }
+
+  // ─── GET /api/push/vapid-key — 获取公钥 ───
+  if (req.method === 'GET' && req.url === '/api/push/vapid-key') {
+    return sendJSON(res, 200, { publicKey: VAPID_PUBLIC });
+  }
+
   serveStatic(req, res);
 });
 

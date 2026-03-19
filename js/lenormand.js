@@ -57,8 +57,7 @@ class LenormandDeck {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         question: question || '',
-        cards: cards.map(c => ({ name: c.name, keywords: c.keywords, modifier: c.modifier })),
-      }),
+        cards: cards.map(c => ({ name: c.name, keywords: c.keywords, modifier: c.modifier })), ...getPersonaIds()}),
     });
     if (!res.ok) throw new Error('API failed');
     const data = await res.json();

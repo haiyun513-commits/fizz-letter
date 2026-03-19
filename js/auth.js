@@ -1,5 +1,5 @@
 // 前端认证模块
-const Auth = {
+window.Auth = {
   TOKEN_KEY: 'fizz_token',
   USER_KEY: 'fizz_user',
 

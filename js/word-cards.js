@@ -244,7 +244,7 @@ const _POOLS = {
 
   // ═══ care ═══
   care: { mood: 'warm', texts: [
-    "多喝热水", "别熬夜", "注意保暖", "注意安全", "照顾好自己", "保护好自己", "穿舒服点", "多喝点水", "少吃零食", "别抽烟",
+    "多喝热水", "别熬夜", "注意保暖", "注意安全", "照顾好自己", "保护好自己", "穿舒服点", "多喝点水", "少吃零食",
     "好好休息", "注意身体", "记得吃饭", "早点睡", "好好吃饭", "该吃饭了", "该睡觉了", "出去透透气", "辛苦了", "好好照顾自己",
     "有风带帽子吧", "你没有做错", "加油我支持你", "有事就找我", "我会保护你", "我想照顾你", "我会帮你", "我会照顾你的", "别怕有我在", "没有受伤",
     "一点小伤而已", "受了点小伤", "你来找我我就开心", "多陪陪我", "我会多陪着你", "最近天凉了多加些衣服", "别着急", "别担心", "别害怕", "别难过",
@@ -960,6 +960,7 @@ class WordCardEngine {
     this.usedTexts = new Set(); // 已抽过的卡文本（避免短期重复）
     this.customCards = [];   // 用户自定义卡片 [{text, id}]
     this.cardMode = "default"; // "default" | "custom" | "mixed"
+    this.disabledPools = new Set(); // 用户关闭的卡池 ID
 
     // 预处理：按 trigger 长度降序排列，保证最长匹配优先
     this._sortedTriggers = [];
@@ -986,6 +987,10 @@ class WordCardEngine {
     if (["default", "custom", "mixed"].includes(mode)) {
       this.cardMode = mode;
     }
+  }
+
+  setDisabledPools(poolIds) {
+    this.disabledPools = new Set(poolIds || []);
   }
 
   // 从自定义卡池随机抽 n 张（去重）
@@ -1244,13 +1249,14 @@ class WordCardEngine {
     const tempUsed = new Set();
 
     for (const name of poolNames) {
+      if (this.disabledPools.has(name)) continue; // 跳过关闭的卡池
       const pool = _POOLS[name];
       if (!pool) continue;
       const cards = pool.texts
         .map(text => ({ text, mood: _assignMood(text, pool.mood) }))
         .filter(c => !this.usedTexts.has(c.text) && !tempUsed.has(c.text));
       const shuffled = cards.sort(() => Math.random() - 0.5);
-      const count = Math.min(3, shuffled.length);
+      const count = Math.min(2, shuffled.length);
       for (let i = 0; i < count && candidates.length < n; i++) {
         candidates.push({ text: shuffled[i].text, mood: shuffled[i].mood, source: 'ai-pool' });
         tempUsed.add(shuffled[i].text);

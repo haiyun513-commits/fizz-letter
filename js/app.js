@@ -1,7 +1,46 @@
 // 主流程控制
+
+// ── Persona ID helper for AI requests ──
+function getPersonaIds() {
+  try {
+    return {
+      selfId: localStorage.getItem('active_self_id') || '',
+      dreamId: localStorage.getItem('active_dream_id') || ''
+    };
+  } catch(e) { return { selfId: '', dreamId: '' }; }
+}
+
+function getActivePersonaInfo(type) {
+  try {
+    var key = type === 'self' ? 'active_self_info' : 'active_dream_info';
+    var raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+
+function updatePersonaBar() {
+  var bar = document.getElementById('persona-bar');
+  if (!bar) return;
+  var selfInfo = getActivePersonaInfo('self');
+  var dreamInfo = getActivePersonaInfo('dream');
+  if (!selfInfo && !dreamInfo) {
+    bar.style.display = 'none';
+    return;
+  }
+  bar.style.display = '';
+  var selfName = selfInfo ? selfInfo.name : '我';
+  var dreamName = dreamInfo ? dreamInfo.name : 'TA';
+  var selfAva = selfInfo && selfInfo.avatar_url ? '<img class="pbar-ava" src="' + selfInfo.avatar_url + '">' : '<span class="pbar-ava pbar-ava-empty">' + selfName.charAt(0) + '</span>';
+  var dreamAva = dreamInfo && dreamInfo.avatar_url ? '<img class="pbar-ava" src="' + dreamInfo.avatar_url + '">' : '<span class="pbar-ava pbar-ava-empty">' + dreamName.charAt(0) + '</span>';
+  bar.innerHTML = selfAva + '<span class="pbar-name">' + selfName + '</span>'
+    + '<span class="pbar-arrow">\u21c4</span>'
+    + dreamAva + '<span class="pbar-name">' + dreamName + '</span>';
+}
 document.addEventListener('DOMContentLoaded', () => {
   const screens = {
     welcome: document.getElementById('screen-welcome'),
+    letterChoice: document.getElementById('screen-letter-choice'),
+    dreamSelect: document.getElementById('screen-dream-select'),
     bubbles: document.getElementById('screen-bubbles'),
     message: document.getElementById('screen-message'),
     loading: document.getElementById('screen-loading'),
@@ -22,6 +61,9 @@ document.addEventListener('DOMContentLoaded', () => {
     mailboxHome: document.getElementById('screen-mailbox-home'),
     penpalCreate: document.getElementById('screen-penpal-create'),
     penpalDetail: document.getElementById('screen-penpal-detail'),
+    profileHome: document.getElementById('screen-profile-home'),
+    personaEdit: document.getElementById('screen-persona-edit'),
+    pairingEdit: document.getElementById('screen-pairing-edit'),
   };
 
   const bubbleContainer = document.getElementById('bubble-container');
@@ -45,7 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
       var res = await fetch('/api/credits', { headers: Auth.authHeaders() });
       var data = await res.json();
       if (data.credits !== undefined) {
-        creditsEl.textContent = data.credits + ' 积分';
+        creditsEl.textContent = '✦ ' + data.credits;
         creditsEl.style.display = '';
       }
     } catch(e) { creditsEl.style.display = 'none'; }
@@ -56,11 +98,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const user = Auth.getUser();
       document.getElementById('auth-area').style.display = 'none';
       document.getElementById('auth-user-area').style.display = 'flex';
+      document.getElementById('auth-user-left').style.display = 'flex';
       document.getElementById('auth-nickname').textContent = user?.nickname || '';
       loadCredits();
     } else {
       document.getElementById('auth-area').style.display = 'flex';
       document.getElementById('auth-user-area').style.display = 'none';
+      document.getElementById('auth-user-left').style.display = 'none';
       var creditsEl = document.getElementById('auth-credits');
       if (creditsEl) creditsEl.style.display = 'none';
     }
@@ -152,7 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-settings').addEventListener('click', () => {
     const user = Auth.getUser();
     if (!user) return;
-    document.getElementById('settings-nickname').value = user.nickname || '';
+    var _sNick = document.getElementById('settings-nickname'); if (_sNick) _sNick.value = user.nickname || '';
     document.getElementById('settings-email').textContent = user.email || '';
     // 加载用户头像预览
     try {
@@ -172,9 +216,18 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('settings-old-pwd').value = '';
     document.getElementById('settings-new-pwd').value = '';
     document.getElementById('settings-confirm-pwd').value = '';
-    document.getElementById('nickname-msg').textContent = '';
+    var _nMsg = document.getElementById('nickname-msg'); if (_nMsg) _nMsg.textContent = '';
     document.getElementById('password-error').textContent = '';
     document.getElementById('password-success').textContent = '';
+    // load credits
+    var creditsValEl = document.getElementById('settings-credits-value');
+    if (creditsValEl) {
+      creditsValEl.textContent = '--';
+      fetch('/api/credits', { headers: Auth.authHeaders() })
+        .then(function(r) { return r.json(); })
+        .then(function(d) { if (d.credits !== undefined) creditsValEl.textContent = '✦ ' + d.credits; })
+        .catch(function() {});
+    }
     showScreen('settings');
   });
 
@@ -182,6 +235,39 @@ document.addEventListener('DOMContentLoaded', () => {
     showScreen('welcome');
   });
 
+
+
+
+  // === 语音设置 ===
+  document.getElementById("btn-voice-settings-toggle").addEventListener("click", function() {
+    var panel = document.getElementById("voice-settings-panel");
+    if (panel.style.display === "none") {
+      panel.style.display = "block";
+      // 读取已保存的值
+      var saved = JSON.parse(localStorage.getItem("fizz_voice_settings") || "{}");
+      if (saved.apiKey) document.getElementById("voice-api-key").value = saved.apiKey;
+      if (saved.voiceId) document.getElementById("voice-id").value = saved.voiceId;
+      if (saved.model) document.getElementById("voice-model").value = saved.model;
+    } else {
+      panel.style.display = "none";
+    }
+  });
+
+  document.getElementById("btn-voice-save").addEventListener("click", function() {
+    var apiKey = document.getElementById("voice-api-key").value.trim();
+    var voiceId = document.getElementById("voice-id").value.trim();
+    var model = document.getElementById("voice-model").value;
+    var msgEl = document.getElementById("voice-settings-msg");
+    if (!apiKey || !voiceId) {
+      msgEl.style.color = "var(--error-color, #e74c3c)";
+      msgEl.textContent = "请填写 API Key 和音色 ID";
+      return;
+    }
+    localStorage.setItem("fizz_voice_settings", JSON.stringify({ apiKey: apiKey, voiceId: voiceId, model: model }));
+    msgEl.style.color = "var(--accent, #4ecdc4)";
+    msgEl.textContent = "已保存 ✓";
+    setTimeout(function() { msgEl.textContent = ""; }, 2000);
+  });
 
   // 设置页头像上传
   var _settingsAvatarFile = document.getElementById("settings-avatar-file");
@@ -224,7 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   // 保存昵称
-  document.getElementById('btn-save-nickname').addEventListener('click', async () => {
+  var _btnNick = document.getElementById('btn-save-nickname'); if (_btnNick) _btnNick.addEventListener('click', async () => {
     const nickname = document.getElementById('settings-nickname').value;
     const msgEl = document.getElementById('nickname-msg');
     msgEl.textContent = '';
@@ -287,6 +373,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-mailbox').addEventListener('click', () => {
     showScreen('mailboxHome');
     PenPal.loadMailbox();
+  });
+
+  document.getElementById('btn-profile-welcome').addEventListener('click', () => {
+    showScreen('profileHome');
+    if (window.ProfileArchive) ProfileArchive.open();
   });
 
   document.getElementById('btn-mailbox-back').addEventListener('click', () => {
@@ -659,7 +750,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('btn-empty-start').addEventListener('click', () => {
-    showScreen('letter');
+    showScreen('letter'); updatePersonaBar();
     if (typeof generateLetter === 'function') generateLetter();
   });
 
@@ -801,8 +892,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 开始按钮
   document.getElementById('btn-start').addEventListener('click', () => {
-    showScreen('bubbles');
-    manager.startRound();
+    showScreen('letterChoice');
   });
 
   // 返回首页
@@ -830,6 +920,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 全部完成回调
   manager.onAllComplete = (selectedWords) => {
+    _msgFrom = 'bubbles';
     showScreen('message');
     // 显示选中的词
     const preview = document.getElementById('words-preview');
@@ -844,6 +935,175 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('btn-skip-message').addEventListener('click', () => {
     generateLetter(manager.selectedWords, '');
+  });
+
+  // ─── 拆信：路径选择 ───
+  document.getElementById('btn-lc-back').addEventListener('click', () => { showScreen('welcome'); });
+
+  // 梦境连线 → 原始选词流程
+  document.getElementById('btn-lc-anon').addEventListener('click', () => {
+    // 清掉角色设定（纯匿名）
+    _dreamLetterSelfId = '';
+    _dreamLetterDreamId = '';
+    showScreen('bubbles');
+    manager.startRound();
+  });
+
+  // 找他入梦 → 角色选择
+  document.getElementById('btn-lc-persona').addEventListener('click', () => {
+    showScreen('dreamSelect');
+    initDreamSelect();
+  });
+
+  // ─── 找他入梦：角色选择 ───
+  var _dreamLetterSelfId = '';
+  var _dreamLetterDreamId = '';
+  var _dreamLetterSelfName = '';
+  var _dreamLetterDreamName = '';
+  var _dsPickTarget = ''; // 'self' or 'dream'
+  var _dsPersonasCache = null;
+
+  document.getElementById('btn-ds-back').addEventListener('click', () => { showScreen('letterChoice'); });
+
+  // 写心情页返回
+  var _msgFrom = 'bubbles'; // track where message screen came from
+  document.getElementById('btn-msg-back').addEventListener('click', () => {
+    showScreen(_msgFrom === 'dream' ? 'dreamSelect' : 'letterChoice');
+  });
+
+  async function initDreamSelect() {
+    _dreamLetterSelfId = '';
+    _dreamLetterDreamId = '';
+    _dreamLetterSelfName = '';
+    _dreamLetterDreamName = '';
+    // Reset UI
+    document.getElementById('ds-ava-self-img').style.display = 'none';
+    document.getElementById('ds-ava-self-default').style.display = '';
+    document.getElementById('ds-ava-self-default').textContent = '+';
+    document.getElementById('ds-name-self').textContent = '未选择';
+    document.getElementById('ds-ava-dream-img').style.display = 'none';
+    document.getElementById('ds-ava-dream-default').style.display = '';
+    document.getElementById('ds-ava-dream-default').textContent = '+';
+    document.getElementById('ds-name-dream').textContent = '未选择';
+    // Pre-fetch personas
+    try {
+      var res = await fetch('/api/personas', { headers: Auth.authHeaders ? Auth.authHeaders() : {} });
+      var data = await res.json();
+      _dsPersonasCache = data.personas || [];
+    } catch(e) { _dsPersonasCache = []; }
+  }
+
+  document.getElementById('ds-slot-self').addEventListener('click', () => {
+    _dsPickTarget = 'self';
+    showDsPicker('选择「我」的角色', 'self');
+  });
+
+  document.getElementById('ds-slot-dream').addEventListener('click', () => {
+    _dsPickTarget = 'dream';
+    showDsPicker('选择「TA」的角色', 'dream_role');
+  });
+
+  function showDsPicker(title, type) {
+    var panel = document.getElementById('ds-pick-panel');
+    var list = document.getElementById('ds-pick-list');
+    document.getElementById('ds-pick-title').textContent = title;
+    panel.style.display = '';
+    requestAnimationFrame(() => { panel.querySelector('.wc-persona-panel-sheet').classList.add('wc-pp-sheet-in'); });
+
+    var personas = (_dsPersonasCache || []).filter(function(p) { return p.type === type; });
+    list.innerHTML = '';
+
+    // "不选择"选项（留空=匿名）
+    var clearRow = document.createElement('div');
+    clearRow.className = 'wc-pp-row wc-pp-row-anon';
+    clearRow.innerHTML = '<div class="wc-pp-row-ava wc-pp-row-ava-anon">✧</div><span class="wc-pp-row-name">不设定</span>';
+    clearRow.addEventListener('click', function() {
+      if (_dsPickTarget === 'self') {
+        _dreamLetterSelfId = ''; _dreamLetterSelfName = '';
+        document.getElementById('ds-ava-self-img').style.display = 'none';
+        document.getElementById('ds-ava-self-default').style.display = '';
+        document.getElementById('ds-ava-self-default').textContent = '+';
+        document.getElementById('ds-name-self').textContent = '未选择';
+      } else {
+        _dreamLetterDreamId = ''; _dreamLetterDreamName = '';
+        document.getElementById('ds-ava-dream-img').style.display = 'none';
+        document.getElementById('ds-ava-dream-default').style.display = '';
+        document.getElementById('ds-ava-dream-default').textContent = '+';
+        document.getElementById('ds-name-dream').textContent = '未选择';
+      }
+      hideDsPicker();
+    });
+    list.appendChild(clearRow);
+
+    for (var i = 0; i < personas.length; i++) {
+      var p = personas[i];
+      var row = document.createElement('div');
+      row.className = 'wc-pp-row';
+      var avaHtml = p.avatar_url
+        ? '<img class="wc-pp-row-ava" src="' + p.avatar_url + '" alt="">'
+        : '<div class="wc-pp-row-ava wc-pp-row-ava-empty">' + (p.name || '?').charAt(0) + '</div>';
+      row.innerHTML = avaHtml + '<span class="wc-pp-row-name">' + (p.name || '未命名') + '</span>';
+      row.addEventListener('click', (function(persona) {
+        return function() {
+          if (_dsPickTarget === 'self') {
+            _dreamLetterSelfId = persona.id;
+            _dreamLetterSelfName = persona.name || '';
+            var img = document.getElementById('ds-ava-self-img');
+            var def = document.getElementById('ds-ava-self-default');
+            if (persona.avatar_url) { img.src = persona.avatar_url; img.style.display = ''; def.style.display = 'none'; }
+            else { img.style.display = 'none'; def.style.display = ''; def.textContent = (persona.name || '?').charAt(0); }
+            document.getElementById('ds-name-self').textContent = persona.name || '未命名';
+          } else {
+            _dreamLetterDreamId = persona.id;
+            _dreamLetterDreamName = persona.name || '';
+            var img = document.getElementById('ds-ava-dream-img');
+            var def = document.getElementById('ds-ava-dream-default');
+            if (persona.avatar_url) { img.src = persona.avatar_url; img.style.display = ''; def.style.display = 'none'; }
+            else { img.style.display = 'none'; def.style.display = ''; def.textContent = (persona.name || '?').charAt(0); }
+            document.getElementById('ds-name-dream').textContent = persona.name || '未命名';
+          }
+          hideDsPicker();
+        };
+      })(p));
+      list.appendChild(row);
+    }
+
+    if (personas.length === 0) {
+      var emptyRow = document.createElement('div');
+      emptyRow.className = 'wc-pp-empty';
+      emptyRow.textContent = '还没有创建角色，去档案添加';
+      list.appendChild(emptyRow);
+    }
+  }
+
+  function hideDsPicker() {
+    var panel = document.getElementById('ds-pick-panel');
+    var sheet = panel.querySelector('.wc-persona-panel-sheet');
+    sheet.classList.remove('wc-pp-sheet-in');
+    setTimeout(function() { panel.style.display = 'none'; }, 250);
+  }
+
+  document.getElementById('ds-pick-close').addEventListener('click', hideDsPicker);
+  document.querySelector('#ds-pick-panel .wc-persona-panel-bg').addEventListener('click', hideDsPicker);
+
+  // 开始入梦 → 跳到写心情页（跳过选词）
+  document.getElementById('btn-ds-go').addEventListener('click', () => {
+    // 设置角色 ID 到 localStorage，让 generateLetter 的 getPersonaIds 读到
+    if (_dreamLetterSelfId) localStorage.setItem('active_self_id', _dreamLetterSelfId);
+    if (_dreamLetterDreamId) localStorage.setItem('active_dream_id', _dreamLetterDreamId);
+    _msgFrom = 'dream';
+    showScreen('message');
+    var preview = document.getElementById('words-preview');
+    if (_dreamLetterSelfName || _dreamLetterDreamName) {
+      var hint = '';
+      if (_dreamLetterSelfName) hint += _dreamLetterSelfName;
+      hint += ' → ';
+      if (_dreamLetterDreamName) hint += _dreamLetterDreamName;
+      else hint += '?';
+      preview.innerHTML = '<span class="word-chip">' + hint + '</span>';
+    } else {
+      preview.innerHTML = '';
+    }
   });
 
   // 生成信件（先调API，失败则用预写的）
@@ -863,7 +1123,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await fetch('/api/letter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ words, style, userMessage }),
+        body: JSON.stringify({ words, style, userMessage , ...getPersonaIds()}),
       });
       
       if (!res.ok) throw new Error('API failed');
@@ -1291,7 +1551,7 @@ document.addEventListener('DOMContentLoaded', () => {
     betweenApiPromise = fetch('/api/between', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userWord: betweenUserWord, aiWord: betweenAiWord }),
+      body: JSON.stringify({ userWord: betweenUserWord, aiWord: betweenAiWord , ...getPersonaIds()}),
     }).then(r => r.json()).catch(() => null);
 
     // 阶段 1：光球聚拢到中心
@@ -1891,8 +2151,7 @@ document.addEventListener('DOMContentLoaded', () => {
         body: JSON.stringify({
           question: question || "",
           cards: cards.map(c => ({ name: c.name, keywords: c.keywords, modifier: c.modifier })),
-          mode: "whisper",
-        }),
+          mode: "whisper", ...getPersonaIds()}),
       });
       const data = await res.json();
       whisperEl.textContent = data.reading || "……";
@@ -2037,3 +2296,338 @@ document.addEventListener('DOMContentLoaded', () => {
     cimg3.src = "images/lenormand/" + encodeURIComponent(cards[2].image);
   });
 });
+
+
+// ═══ Web Push 通知 ═══
+(async function registerPush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (sub) return;
+    window._pushReg = reg;
+    // 自动请求通知权限（3 秒后）
+    setTimeout(requestPushPermission, 3000);
+  } catch(e) {
+    console.log('SW registration failed:', e);
+  }
+})();
+
+async function requestPushPermission() {
+  if (!window._pushReg) return;
+  if (Notification.permission === 'denied') return;
+  if (Notification.permission === 'granted') {
+    await _subscribePush();
+    return;
+  }
+  var permission = await Notification.requestPermission();
+  if (permission === 'granted') {
+    await _subscribePush();
+  }
+}
+
+async function _subscribePush() {
+  try {
+    var reg = window._pushReg;
+    var sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      var resp = await fetch('/api/push/vapid-key');
+      var data = await resp.json();
+      var key = urlBase64ToUint8Array(data.publicKey);
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: key,
+      });
+    }
+    await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subscription: sub.toJSON(),
+        userId: (function(){ try { var u = JSON.parse(localStorage.getItem('fizz_user')); return u && u.id ? u.id : 'anonymous'; } catch(e) { return 'anonymous'; } })(),
+      }),
+    });
+  } catch(e) {
+    console.log('Push subscribe failed:', e);
+  }
+}
+
+function urlBase64ToUint8Array(base64String) {
+  var padding = '='.repeat((4 - base64String.length % 4) % 4);
+  var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  var rawData = atob(base64);
+  var outputArray = new Uint8Array(rawData.length);
+  for (var i = 0; i < rawData.length; i++) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+
+// ═══ AI 来电系统（全站级别） ═══
+(function() {
+  var incomingCallEl = null;
+
+  function getAuthHeaders() {
+    var token = Auth.getToken();
+    return token ? { 'Authorization': 'Bearer ' + token } : {};
+  }
+
+  async function checkIncomingCall() {
+    if (!Auth.isLoggedIn() || incomingCallEl) return;
+    // 如果字卡通话中也跳过
+    if (window._wcInCall) return;
+    try {
+      var res = await fetch('/api/incoming-call', { headers: getAuthHeaders() });
+      var data = await res.json();
+      if (data.incoming) {
+        showIncomingCall(data);
+      }
+    } catch(e) {}
+  }
+
+  function showIncomingCall(data) {
+    if (incomingCallEl) return;
+    incomingCallEl = document.createElement('div');
+    incomingCallEl.className = 'wc-incoming-call';
+
+    var bgHtml = data.callerAvatar ? '<div class="ic-bg"><img src="' + data.callerAvatar + '"></div>' : '<div class="ic-bg"></div>';
+    var avatarHtml = data.callerAvatar ? '<img src="' + data.callerAvatar + '" onerror="this.style.display=\'none\';this.parentNode.textContent=\'' + (data.callerName || 'TA').charAt(0) + '\'">' : (data.callerName || 'TA').charAt(0);
+    var label = data.callType === 'video' ? '视频通话' : '语音通话';
+
+    incomingCallEl.innerHTML = bgHtml +
+      '<div class="ic-content">' +
+        '<div class="ic-avatar">' + avatarHtml + '</div>' +
+        '<div class="ic-name">' + (data.callerName || 'TA') + '</div>' +
+        '<div class="ic-label">' + label + '来电...</div>' +
+        '<div class="ic-btns">' +
+          '<div class="ic-btn">' +
+            '<div class="ic-btn-circle reject"><svg viewBox="0 0 24 24" fill="#fff"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.18-.29-.44-.29-.72 0-.28.11-.54.29-.72C3.69 8.48 7.66 7 12 7s8.31 1.47 11.71 4.72c.18.18.29.44.29.72 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85a1 1 0 0 1-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg></div>' +
+            '<span class="ic-btn-label">拒绝</span>' +
+          '</div>' +
+          '<div class="ic-btn">' +
+            '<div class="ic-btn-circle accept"><svg viewBox="0 0 24 24" fill="#fff"><path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 0 0-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/></svg></div>' +
+            '<span class="ic-btn-label">接听</span>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    document.body.appendChild(incomingCallEl);
+
+    // 注入来电 CSS（如果还没有）
+    if (!document.getElementById('ic-global-css')) {
+      var style = document.createElement('style');
+      style.id = 'ic-global-css';
+      style.textContent = `
+.wc-incoming-call{position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff}
+.wc-incoming-call .ic-bg{position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460);z-index:0}
+.wc-incoming-call .ic-bg img{width:100%;height:100%;object-fit:cover;filter:blur(25px) brightness(0.35);transform:scale(1.15)}
+.wc-incoming-call .ic-content{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:12px}
+.wc-incoming-call .ic-avatar{width:100px;height:100px;border-radius:50%;overflow:hidden;border:3px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;font-size:2.2rem;animation:icRing 2s ease-in-out infinite}
+.wc-incoming-call .ic-avatar img{width:100%;height:100%;object-fit:cover}
+.wc-incoming-call .ic-name{font-size:1.3rem;font-weight:500;margin-top:8px}
+.wc-incoming-call .ic-label{font-size:0.85rem;opacity:0.7;animation:icPulse 1.5s ease-in-out infinite}
+@keyframes icPulse{0%,100%{opacity:0.4}50%{opacity:1}}
+.wc-incoming-call .ic-btns{display:flex;gap:60px;margin-top:50px}
+.wc-incoming-call .ic-btn{display:flex;flex-direction:column;align-items:center;gap:8px}
+.wc-incoming-call .ic-btn-circle{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .15s}
+.wc-incoming-call .ic-btn-circle:active{transform:scale(.9)}
+.wc-incoming-call .ic-btn-circle.reject{background:#e74c3c}
+.wc-incoming-call .ic-btn-circle.accept{background:#07c160}
+.wc-incoming-call .ic-btn-circle svg{width:28px;height:28px}
+.wc-incoming-call .ic-btn-label{font-size:0.75rem;opacity:0.8}
+@keyframes icRing{0%,100%{transform:rotate(0)}10%{transform:rotate(15deg)}20%{transform:rotate(-15deg)}30%{transform:rotate(10deg)}40%{transform:rotate(-10deg)}50%{transform:rotate(0)}}
+      `;
+      document.head.appendChild(style);
+    }
+
+    // 振动
+    if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 500]);
+
+    // 3 分钟超时
+    var autoMissTimer = setTimeout(function() { dismissIncomingCall(); }, 180000);
+
+    // 拒接
+    incomingCallEl.querySelector('.reject').addEventListener('click', async function() {
+      clearTimeout(autoMissTimer);
+      try { await fetch('/api/incoming-call/reject', { method: 'POST', headers: getAuthHeaders() }); } catch(e) {}
+      dismissIncomingCall();
+    });
+
+    // 接听 → 跳转到字卡页面并打开对应聊天+通话
+    incomingCallEl.querySelector('.accept').addEventListener('click', async function() {
+      clearTimeout(autoMissTimer);
+      try {
+        var res = await fetch('/api/incoming-call/answer', { method: 'POST', headers: getAuthHeaders() });
+        var d = await res.json();
+        dismissIncomingCall();
+        if (d.ok) {
+          // 存来电信息到 sessionStorage，让字卡页面接手
+          sessionStorage.setItem('incoming_call', JSON.stringify({
+            callType: d.callType || 'voice',
+            chatId: d.chatId
+          }));
+          // 点击字卡按钮进入字卡系统
+          var wcBtn = document.getElementById('btn-wordcard');
+          if (wcBtn) {
+            wcBtn.click();
+            console.log('[incoming] clicked btn-wordcard');
+          }
+          // 延迟触发，等字卡页面 UI 就绪
+          setTimeout(function() {
+            if (typeof window.handleIncomingCallAccept === 'function') {
+              console.log('[incoming] calling handleIncomingCallAccept');
+              window.handleIncomingCallAccept(d.chatId, d.callType || 'voice');
+            } else {
+              console.log('[incoming] handleIncomingCallAccept not available, relying on sessionStorage');
+            }
+          }, 500);
+        }
+      } catch(e) { dismissIncomingCall(); }
+    });
+  }
+
+  function dismissIncomingCall() {
+    if (incomingCallEl) { incomingCallEl.remove(); incomingCallEl = null; }
+    if (navigator.vibrate) navigator.vibrate(0);
+  }
+
+  // 每 10 秒检查来电
+  setInterval(checkIncomingCall, 10000);
+  // 页面加载后立即检查
+  if (window.location.search.includes('incoming=1')) {
+    checkIncomingCall();
+    history.replaceState(null, '', window.location.pathname);
+  } else {
+    setTimeout(checkIncomingCall, 1500);
+  }
+})();
+
+
+// ═══ 来电通知设置按钮 ═══
+(function() {
+  var notifyBtn = document.getElementById('btn-enable-notify');
+  var notifyStatus = document.getElementById('notify-status');
+  if (!notifyBtn) return;
+
+  function updateNotifyUI() {
+    if (!('Notification' in window)) {
+      notifyStatus.textContent = '浏览器不支持';
+      notifyBtn.textContent = '浏览器不支持通知';
+      notifyBtn.disabled = true;
+      notifyBtn.style.opacity = '0.5';
+      return;
+    }
+    if (Notification.permission === 'granted') {
+      notifyStatus.textContent = '✅ 已开启';
+      notifyStatus.style.color = '#07c160';
+      notifyBtn.textContent = '已开启来电通知';
+      notifyBtn.style.background = 'rgba(7,193,96,0.15)';
+      notifyBtn.style.color = '#07c160';
+      notifyBtn.style.border = '1px solid rgba(7,193,96,0.3)';
+      // 确保已注册推送订阅
+      registerPushIfNeeded();
+    } else if (Notification.permission === 'denied') {
+      notifyStatus.textContent = '❌ 已拒绝';
+      notifyStatus.style.color = '#e74c3c';
+      notifyBtn.textContent = '通知被拒绝（请在浏览器设置中开启）';
+      notifyBtn.style.opacity = '0.7';
+    } else {
+      notifyStatus.textContent = '未开启';
+      notifyBtn.textContent = '📞 开启来电通知';
+    }
+  }
+
+  notifyBtn.addEventListener('click', async function() {
+    if (!('Notification' in window)) return;
+    if (Notification.permission === 'granted') {
+      // 已开启，发一条测试通知
+      new Notification('通知已开启', { body: '你会收到来电提醒 📞', icon: '/images/apple-touch-icon.png' });
+      return;
+    }
+    if (Notification.permission === 'denied') {
+      alert('通知已被浏览器拒绝。\n\n请在浏览器设置中手动开启：\n设置 → 网站设置 → 通知 → 允许');
+      return;
+    }
+    // 请求权限
+    var permission = await Notification.requestPermission();
+    updateNotifyUI();
+    if (permission === 'granted') {
+      new Notification('通知已开启！', { body: 'TA 给你打电话时你会收到提醒 📞', icon: '/images/apple-touch-icon.png' });
+      registerPushIfNeeded();
+    }
+  });
+
+  async function registerPushIfNeeded() {
+    try {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+      var reg = await navigator.serviceWorker.ready;
+      var sub = await reg.pushManager.getSubscription();
+      if (sub) return; // 已有订阅
+      // 获取 VAPID 公钥
+      var res = await fetch('/api/push/vapid-key');
+      var data = await res.json();
+      if (!data.publicKey) return;
+      var key = urlBase64ToUint8Array(data.publicKey);
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+      // 发送订阅到服务器
+      var token = Auth.getToken ? Auth.getToken() : localStorage.getItem('fizz_token');
+      var userId = 'anonymous';
+      try { var u = JSON.parse(localStorage.getItem('fizz_user')); if (u && u.id) userId = u.id; } catch(e) {}
+      await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ subscription: sub, userId: userId })
+      });
+      console.log('Push subscription registered');
+    } catch(e) { console.log('Push registration error:', e); }
+  }
+
+  function urlBase64ToUint8Array(base64String) {
+    var padding = '='.repeat((4 - base64String.length % 4) % 4);
+    var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    var rawData = window.atob(base64);
+    var outputArray = new Uint8Array(rawData.length);
+    for (var i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+    return outputArray;
+  }
+
+  // 页面加载时更新状态
+  updateNotifyUI();
+})();
+
+
+// ═══ 一键来电按钮 ═══
+(function() {
+  var testCallBtn = document.getElementById('btn-test-call');
+  var testCallMsg = document.getElementById('test-call-msg');
+  if (!testCallBtn) return;
+
+  testCallBtn.addEventListener('click', async function() {
+    if (!Auth.isLoggedIn()) { testCallMsg.textContent = '请先登录'; return; }
+    testCallBtn.disabled = true;
+    testCallMsg.textContent = '呼叫中...';
+    try {
+      var token = Auth.getToken();
+      var res = await fetch('/api/incoming-call/trigger', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({})
+      });
+      var data = await res.json();
+      if (data.ok) {
+        testCallMsg.textContent = data.callerName + ' 正在给你打电话...';
+        testCallMsg.style.color = '#07c160';
+      } else {
+        testCallMsg.textContent = data.error || '来电失败';
+        testCallMsg.style.color = '#e74c3c';
+      }
+    } catch(e) {
+      testCallMsg.textContent = '网络错误';
+      testCallMsg.style.color = '#e74c3c';
+    }
+    testCallBtn.disabled = false;
+    setTimeout(function() { testCallMsg.textContent = ''; }, 5000);
+  });
+})();

@@ -107,8 +107,7 @@ class TarotDeck {
         question: question || '',
         card: card.name,
         keywords: card.keywords,
-        reversed: card.reversed,
-      }),
+        reversed: card.reversed, ...getPersonaIds()}),
     });
 
     if (!res.ok) throw new Error('API failed');

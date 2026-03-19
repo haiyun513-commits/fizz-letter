@@ -1,0 +1,1070 @@
+/* ============================================================
+   Profile v5 — Character Card Gallery (Tarot-style)
+   ============================================================ */
+
+/* --- Screen override ---------------------------------------- */
+#screen-profile-home.screen {
+  justify-content: flex-start;
+  align-items: stretch;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* --- Header ------------------------------------------------- */
+.profile-header {
+  flex-shrink: 0;
+  text-align: center;
+  padding: 56px 16px 8px;
+}
+.profile-title {
+  font-family: 'LXGW WenKai', 'Noto Serif SC', serif;
+  font-size: clamp(1.1rem, 3.6vw, 1.3rem);
+  color: var(--text-primary);
+  letter-spacing: 0.25em;
+  font-weight: 400;
+}
+
+/* --- Feedback banner ---------------------------------------- */
+.profile-feedback {
+  flex-shrink: 0;
+  margin: 0 24px 8px;
+  text-align: center;
+}
+
+/* --- Card Deck (carousel) ----------------------------------- */
+.profile-deck {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  touch-action: pan-y;
+  min-height: 0;
+}
+
+/* --- Individual card ---------------------------------------- */
+.pcard {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 24px 24px;
+  box-sizing: border-box;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform, opacity;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.pcard[data-offset="0"] {
+  transform: translateX(0);
+  opacity: 1;
+}
+.pcard[data-offset="-1"] {
+  transform: translateX(-105%);
+  opacity: 0;
+}
+.pcard[data-offset="1"] {
+  transform: translateX(105%);
+  opacity: 0;
+}
+.pcard[data-offset="-2"],
+.pcard[data-offset="2"] {
+  transform: translateX(0);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* --- Card inner layout (tarot-result-stage) ----------------- */
+.pcard-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 340px;
+  width: 100%;
+  gap: 0;
+}
+
+/* --- Card image (tarot-card-img) ---------------------------- */
+.pcard-img {
+  width: 240px;
+  height: auto;
+  max-height: 50vh;
+  object-fit: cover;
+  border-radius: 12px;
+  box-shadow:
+    0 12px 48px rgba(0, 0, 0, 0.15),
+    0 4px 16px rgba(0, 0, 0, 0.08);
+  animation: fadeInUp 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  transition: none;
+}
+.pcard-img:active {
+  transform: scale(0.97);
+}
+[data-theme="dark"] .pcard-img {
+  box-shadow:
+    0 12px 48px rgba(0, 0, 0, 0.4),
+    0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+/* No-image placeholder */
+.pcard-img-empty {
+  width: 240px;
+  height: 336px;
+  border-radius: 12px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-ghost);
+  font-size: 2.4rem;
+  animation: fadeInUp 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* --- Card name (tarot-name) --------------------------------- */
+.pcard-name {
+  font-family: 'LXGW WenKai', 'Noto Serif SC', serif;
+  font-size: clamp(1.4rem, 5vw, 1.8rem);
+  color: var(--text-primary);
+  letter-spacing: 0.3em;
+  font-weight: 400;
+  margin-top: 24px;
+  line-height: 1.4;
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.3s both;
+}
+
+/* --- Card summary (tarot-mood) ------------------------------ */
+.pcard-summary {
+  font-family: 'Noto Serif SC', serif;
+  font-weight: 300;
+  font-size: 0.92rem;
+  line-height: 2;
+  color: var(--text-secondary);
+  margin-top: 36px;
+  max-width: 320px;
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.6s both;
+}
+
+/* --- Card actions (edit / delete) --------------------------- */
+.pcard-actions {
+  display: flex;
+  gap: 16px;
+  margin-top: 28px;
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.9s both;
+}
+.pcard-action-btn {
+  background: none;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-family: 'Noto Serif SC', serif;
+  font-size: 0.78rem;
+  padding: 6px 18px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+.pcard-action-btn:hover {
+  background: var(--glass-bg);
+  color: var(--text-primary);
+}
+.pcard-action-btn.danger {
+  color: #c45;
+  border-color: rgba(204, 68, 85, 0.3);
+}
+.pcard-action-btn.danger:hover {
+  background: rgba(204, 68, 85, 0.08);
+  color: #e44;
+}
+
+/* --- Add card (dashed placeholder) -------------------------- */
+.pcard-add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.pcard-add-box {
+  width: 240px;
+  height: 336px;
+  border-radius: 12px;
+  border: 2px dashed var(--glass-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: border-color 0.25s, background 0.25s;
+  animation: fadeInUp 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.pcard-add-box:hover {
+  border-color: var(--accent-dim);
+  background: var(--glass-bg);
+}
+.pcard-add-icon {
+  font-size: 2.2rem;
+  color: var(--text-ghost);
+  font-weight: 200;
+  line-height: 1;
+}
+.pcard-add-label {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 0.82rem;
+  color: var(--text-ghost);
+  font-weight: 300;
+}
+
+/* --- Dots (page indicator) ---------------------------------- */
+.profile-dots {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px 28px;
+}
+.profile-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-ghost);
+  opacity: 0.4;
+  transition: opacity 0.3s, transform 0.3s, background 0.3s;
+}
+.profile-dot.active {
+  opacity: 1;
+  background: var(--accent);
+  transform: scale(1.35);
+}
+
+/* ============================================================
+   Lightbox
+   ============================================================ */
+.profile-lightbox {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 9000;
+  background: rgba(0, 0, 0, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+.profile-lightbox.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Flip card container */
+.lb-flip {
+  width: min(80vw, 380px);
+  height: min(80vh, 560px);
+  perspective: 1200px;
+  cursor: pointer;
+  transform: scale(0.9);
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.profile-lightbox.open .lb-flip {
+  transform: scale(1);
+}
+.lb-flip-inner {
+  position: relative;
+  width: 100%; height: 100%;
+  transition: transform 0.7s cubic-bezier(0.4, 0.0, 0.2, 1);
+  -webkit-transform-style: preserve-3d;
+  transform-style: preserve-3d;
+}
+.lb-flip-inner.flipped {
+  -webkit-transform: rotateY(180deg);
+  transform: rotateY(180deg);
+}
+.lb-flip-front,
+.lb-flip-back {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255,255,255,0.08);
+}
+.lb-flip-front {
+  -webkit-transform: translateZ(1px);
+  transform: translateZ(1px);
+}
+.lb-flip-back {
+  -webkit-transform: rotateY(180deg);
+  transform: rotateY(180deg);
+}
+.profile-lightbox-img {
+  display: block;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  border-radius: 16px;
+  background: #111;
+}
+
+/* Flip hint */
+.flip-hint {
+  margin-top: 18px;
+  color: rgba(255,255,255,0.5);
+  font-size: 0.82rem;
+  letter-spacing: 0.15em;
+  animation: hintPulse 2s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes hintPulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* Dual upload row */
+.dual-upload-row {
+  display: flex;
+  gap: 14px;
+}
+.dual-upload-slot {
+  flex: 1;
+  text-align: center;
+}
+.dual-upload-label {
+  font-size: 0.78rem;
+  color: var(--text-secondary, #aaa);
+  margin-bottom: 6px;
+  letter-spacing: 0.1em;
+}
+.dual-upload-slot .profile-upload-area {
+  aspect-ratio: 3 / 4;
+  min-height: 120px;
+}
+.dual-upload-slot .profile-upload-preview {
+  width: 100%; height: 100%;
+  object-fit: cover;
+}
+
+/* ============================================================
+   Edit Form (screen-persona-edit)
+   ============================================================ */
+#screen-persona-edit.screen {
+  justify-content: flex-start;
+  align-items: stretch;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.profile-form-shell {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 48px 20px 40px;
+  box-sizing: border-box;
+}
+.profile-form-subtitle {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 0.82rem;
+  color: var(--text-ghost);
+  font-weight: 300;
+  margin-top: 4px;
+  margin-bottom: 12px;
+}
+.profile-form {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* --- Upload area -------------------------------------------- */
+.profile-upload-area {
+  width: 100%;
+  max-width: 220px;
+  aspect-ratio: 5 / 7;
+  border-radius: 12px;
+  border: 2px dashed var(--glass-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.25s, background 0.25s;
+  margin: 0 auto;
+}
+.profile-upload-area:hover {
+  border-color: var(--accent-dim);
+  background: var(--glass-bg);
+}
+.profile-upload-preview {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 10px;
+}
+.profile-upload-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.profile-upload-icon {
+  font-size: 2rem;
+  color: var(--text-ghost);
+  font-weight: 200;
+  line-height: 1;
+}
+.profile-upload-text {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 0.82rem;
+  color: var(--text-ghost);
+  font-weight: 300;
+}
+
+/* --- Textarea ----------------------------------------------- */
+.profile-textarea {
+  resize: vertical;
+  min-height: 60px;
+  line-height: 1.8;
+  font-family: 'Noto Serif SC', serif;
+}
+
+/* --- Inline field (text + color picker) --------------------- */
+.profile-inline-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.profile-inline-field .auth-input {
+  flex: 1;
+}
+.profile-color-picker {
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+  padding: 2px;
+  flex-shrink: 0;
+}
+.profile-color-picker::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+.profile-color-picker::-webkit-color-swatch {
+  border-radius: 4px;
+  border: none;
+}
+
+/* --- Form footer -------------------------------------------- */
+.profile-form-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 12px;
+}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+@media (max-width: 380px) {
+  .pcard-img,
+  .pcard-img-empty,
+  .pcard-add-box {
+    width: 200px;
+  }
+  .pcard-img-empty,
+  .pcard-add-box {
+    height: 280px;
+  }
+  .profile-upload-area {
+    max-width: 180px;
+  }
+}
+@media (min-height: 800px) {
+  .pcard-name {
+    margin-top: 32px;
+  }
+}
+
+/* ============================================================
+   Form v2 — Sections, Rows, Attribute Sliders
+   ============================================================ */
+.pform-section-title {
+  font-family: 'LXGW WenKai', 'Noto Serif SC', serif;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  letter-spacing: 0.15em;
+  margin-top: 28px;
+  margin-bottom: 4px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.pform-row {
+  display: flex;
+  gap: 12px;
+}
+.pform-half {
+  flex: 1;
+  min-width: 0;
+}
+
+/* --- Attribute sliders -------------------------------------- */
+.pform-attr {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 8px;
+}
+.pform-attr-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pform-attr-label-l,
+.pform-attr-label-r {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 0.75rem;
+  font-weight: 300;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  min-width: 48px;
+}
+.pform-attr-label-l {
+  text-align: right;
+}
+.pform-attr-label-r {
+  text-align: left;
+}
+
+.pform-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--glass-border);
+  outline: none;
+  transition: background 0.2s;
+}
+.pform-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid var(--bg-primary);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  transition: transform 0.15s;
+}
+.pform-slider::-webkit-slider-thumb:active {
+  transform: scale(1.2);
+}
+.pform-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid var(--bg-primary);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+}
+
+/* ============================================================
+   Profile Tabs
+   ============================================================ */
+.profile-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 0;
+  margin-top: 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.profile-tab {
+  background: none;
+  border: none;
+  color: var(--text-secondary, #999);
+  font-size: 0.88rem;
+  padding: 8px 20px 10px;
+  cursor: pointer;
+  letter-spacing: 0.08em;
+  position: relative;
+  transition: color 0.25s;
+  font-family: inherit;
+}
+.profile-tab.active {
+  color: var(--text-primary, #fff);
+}
+.profile-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 20%;
+  width: 60%;
+  height: 2px;
+  background: var(--accent, #c6d1ea);
+  border-radius: 1px;
+}
+
+/* ============================================================
+   Advanced toggle
+   ============================================================ */
+.pform-advanced-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 0;
+  margin: 8px 0 4px;
+  cursor: pointer;
+  color: var(--text-secondary, #999);
+  font-size: 0.82rem;
+  letter-spacing: 0.1em;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  user-select: none;
+  -webkit-user-select: none;
+  transition: color 0.2s;
+}
+.pform-advanced-toggle:hover {
+  color: var(--text-primary, #fff);
+}
+.pform-advanced-arrow {
+  font-size: 0.7rem;
+  transition: transform 0.2s;
+}
+
+/* ============================================================
+   Active persona badge & button
+   ============================================================ */
+
+/* ── Active persona: static glow + name highlight (GPU-friendly) ── */
+.pcard-img-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.pcard-is-active .pcard-img {
+  box-shadow:
+    0 0 0 2.5px rgba(160, 190, 255, 0.6),
+    0 0 28px rgba(130, 170, 255, 0.35),
+    0 12px 40px rgba(0, 0, 0, 0.12);
+  transform: translateY(-8px) scale(1.03);
+}
+[data-theme=dark] .pcard-is-active .pcard-img {
+  box-shadow:
+    0 0 0 2.5px rgba(140, 175, 245, 0.5),
+    0 0 32px rgba(110, 155, 240, 0.25),
+    0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+/* Active card name */
+.pcard-is-active .pcard-name {
+  color: var(--accent-dim, #7b9ad0);
+  letter-spacing: 0.4em;
+}
+[data-theme=dark] .pcard-is-active .pcard-name {
+  color: #9ab4e0;
+}
+
+/* Non-active cards: dimmed via opacity (cheap) */
+.pcard:not(.pcard-is-active):not(.pcard-add) .pcard-img {
+  opacity: 0.7;
+  transition: none;
+}
+.pcard:not(.pcard-is-active):not(.pcard-add) .pcard-name {
+  opacity: 0.55;
+  transition: none;
+}
+
+/* Active button style */
+.pcard-btn-active {
+  opacity: 0.35;
+  cursor: default;
+  font-size: 0.72rem;
+}
+
+
+/* ── Persona indicator bar ── */
+.persona-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px;
+  margin-bottom: 12px;
+  font-family: 'Noto Serif SC', serif;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  opacity: 0.7;
+  cursor: pointer;
+}
+.pbar-ava {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  vertical-align: middle;
+}
+.pbar-ava-empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  font-size: 0.7rem;
+  color: var(--text-ghost);
+}
+.pbar-name {
+  vertical-align: middle;
+}
+.pbar-arrow {
+  color: var(--text-ghost);
+  font-size: 0.85rem;
+  margin: 0 4px;
+}
+
+
+/* ── Word Card: 联络人面板 ── */
+.wc-persona-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.wc-persona-panel-bg {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.wc-persona-panel-sheet {
+  position: relative;
+  z-index: 1;
+  width: 280px;
+  max-height: 70vh;
+  background: var(--glass-bg, rgba(28,28,36,0.95));
+  border: 1px solid var(--glass-border, rgba(255,255,255,0.1));
+  border-radius: 16px;
+  overflow: hidden;
+  transform: scale(0.9);
+  opacity: 0;
+  transition: transform 0.2s ease-out, opacity 0.2s ease-out;
+}
+.wc-pp-sheet-in {
+  transform: scale(1);
+  opacity: 1;
+}
+.wc-pp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--glass-border, rgba(255,255,255,0.06));
+}
+.wc-pp-title {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 0.95rem;
+  color: var(--text-primary, #e0e0e0);
+  letter-spacing: 0.12em;
+}
+.wc-pp-close {
+  background: none;
+  border: none;
+  color: var(--text-ghost, #666);
+  font-size: 1.3rem;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+}
+.wc-pp-list {
+  overflow-y: auto;
+  max-height: calc(70vh - 52px);
+  padding: 6px 0;
+}
+.wc-pp-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.wc-pp-row:active {
+  background: rgba(255,255,255,0.06);
+}
+.wc-pp-row-ava {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.wc-pp-row-ava-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(160,190,255,0.15), rgba(200,160,255,0.1));
+  font-size: 1rem;
+  color: var(--text-secondary, #aaa);
+  font-family: 'Noto Serif SC', serif;
+}
+.wc-pp-row-ava-anon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.04);
+  border: 1px dashed rgba(255,255,255,0.12);
+  font-size: 1rem;
+  color: var(--text-ghost, #888);
+}
+.wc-pp-row-name {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 0.88rem;
+  color: var(--text-primary, #e0e0e0);
+  letter-spacing: 0.04em;
+}
+.wc-pp-row-anon .wc-pp-row-name {
+  color: var(--text-secondary, #aaa);
+}
+.wc-pp-loading, .wc-pp-empty {
+  text-align: center;
+  color: var(--text-ghost, #777);
+  font-size: 0.82rem;
+  padding: 24px 0;
+}
+
+/* Light theme */
+[data-theme=light] .wc-persona-panel-bg {
+  background: rgba(0,0,0,0.25);
+}
+[data-theme=light] .wc-persona-panel-sheet {
+  background: rgba(255,255,255,0.95);
+  border-color: rgba(0,0,0,0.08);
+}
+[data-theme=light] .wc-pp-row:active {
+  background: rgba(0,0,0,0.04);
+}
+
+/* ── Self avatar in chat header ── */
+.wc-self-ava {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  overflow: hidden;
+  cursor: pointer;
+  position: relative;
+  border: 1.5px solid rgba(255,255,255,0.12);
+  flex-shrink: 0;
+}
+.wc-self-ava img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.wc-self-ava-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  color: var(--text-secondary, #aaa);
+  background: var(--glass-bg, rgba(255,255,255,0.06));
+  font-family: 'Noto Serif SC', serif;
+}
+[data-theme=light] .wc-self-ava {
+  border-color: rgba(0,0,0,0.1);
+}
+
+/* Active row in self switch panel */
+.wc-pp-row-active {
+  background: rgba(160,190,255,0.08);
+}
+.wc-pp-row-check {
+  margin-left: auto;
+  color: var(--accent-dim, #7b9ad0);
+  font-size: 0.85rem;
+}
+
+/* ── List header right group ── */
+.wc-list-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ── Letter Choice Screen ── */
+.lc-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+  padding: 0 24px;
+}
+.lc-title {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 1.1rem;
+  color: var(--text-primary, #e0e0e0);
+  letter-spacing: 0.15em;
+  margin-bottom: 36px;
+}
+.lc-options {
+  display: flex;
+  gap: 20px;
+  width: 100%;
+  max-width: 340px;
+}
+.lc-option {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 12px;
+  border-radius: 16px;
+  background: var(--card-bg, rgba(255,255,255,0.04));
+  border: 1px solid var(--glass-border, rgba(255,255,255,0.08));
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.2s, box-shadow 0.2s;
+}
+.lc-option:active {
+  transform: scale(0.96);
+}
+.lc-option:hover {
+  border-color: rgba(160,190,255,0.3);
+  box-shadow: 0 4px 24px rgba(130,170,255,0.1);
+}
+.lc-option-icon {
+  font-size: 1.8rem;
+  opacity: 0.6;
+}
+.lc-option-name {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 0.95rem;
+  color: var(--text-primary, #e0e0e0);
+  letter-spacing: 0.1em;
+}
+.lc-option-desc {
+  font-size: 0.7rem;
+  color: var(--text-ghost, #777);
+  text-align: center;
+  line-height: 1.4;
+}
+
+/* ── Dream Select Screen ── */
+.ds-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+  padding: 0 24px;
+}
+.ds-title {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 1.1rem;
+  color: var(--text-primary, #e0e0e0);
+  letter-spacing: 0.15em;
+  margin-bottom: 40px;
+}
+.ds-slots {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+.ds-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.ds-slot:active {
+  transform: scale(0.95);
+}
+.ds-slot-ava {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid var(--glass-border, rgba(255,255,255,0.12));
+  transition: border-color 0.2s;
+}
+.ds-slot:hover .ds-slot-ava {
+  border-color: rgba(160,190,255,0.4);
+}
+.ds-slot-ava img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.ds-ava-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: var(--text-ghost, #666);
+  background: var(--card-bg, rgba(255,255,255,0.04));
+  font-family: 'Noto Serif SC', serif;
+}
+.ds-slot-label {
+  font-size: 0.72rem;
+  color: var(--text-ghost, #888);
+  letter-spacing: 0.08em;
+}
+.ds-slot-name {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #bbb);
+  max-width: 80px;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ds-arrow {
+  font-size: 1.2rem;
+  color: var(--text-ghost, #666);
+  margin-top: -20px;
+}
+.ds-hint {
+  font-size: 0.72rem;
+  color: var(--text-ghost, #777);
+  margin-bottom: 32px;
+  letter-spacing: 0.04em;
+}
+
+/* Light theme */
+[data-theme=light] .lc-option {
+  background: rgba(0,0,0,0.02);
+  border-color: rgba(0,0,0,0.08);
+}
+[data-theme=light] .lc-option:hover {
+  border-color: rgba(100,130,200,0.3);
+  box-shadow: 0 4px 24px rgba(100,130,200,0.08);
+}

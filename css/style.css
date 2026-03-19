@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;700&family=Noto+Sans+SC:wght@300;400;700&family=Noto+Serif+SC:wght@300;400;700&family=Dela+Gothic+One&family=DotGothic16&family=LXGW+WenKai&family=Ma+Shan+Zheng&family=ZCOOL+XiaoWei&family=Liu+Jian+Mao+Cao&family=Long+Cang&family=Zhi+Mang+Xing&family=VT323&family=Silkscreen:wght@400;700&family=Press+Start+2P&family=Share+Tech+Mono&family=IBM+Plex+Mono:wght@300;400&display=swap');
+@import url('https://fonts.googleapis.cn/css2?family=Dancing+Script:wght@400;700&family=Noto+Sans+SC:wght@300;400;700&family=Noto+Serif+SC:wght@300;400;700&family=Dela+Gothic+One&family=DotGothic16&family=LXGW+WenKai&family=Ma+Shan+Zheng&family=ZCOOL+XiaoWei&family=Liu+Jian+Mao+Cao&family=Long+Cang&family=Zhi+Mang+Xing&family=VT323&family=Silkscreen:wght@400;700&family=Press+Start+2P&family=Share+Tech+Mono&family=IBM+Plex+Mono:wght@300;400&display=swap');
 
 /*
   字体列表：
@@ -8595,6 +8595,9 @@ body {
 /* ─── 非聊天页 safe area ─── */
 .screen {
   top: env(safe-area-inset-top, 0px) !important;
+  height: calc(100% - env(safe-area-inset-top, 0px)) !important;
+  padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+  box-sizing: border-box !important;
 }
 #screen-wordcard-input.screen {
   top: 0 !important;
@@ -8710,4 +8713,14 @@ html, body {
 .update-btn-never {
   color: #8e8e93;
   font-weight: 400;
+}
+
+/* 设置页滚动 */
+#screen-settings {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+#screen-settings .settings-box {
+  margin: 40px auto;
+  padding-bottom: 60px;
 }

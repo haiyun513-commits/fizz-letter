@@ -19,7 +19,8 @@
   <meta property="og:type" content="website">
   <meta name="twitter:card" content="summary">
   <link rel="stylesheet" href="css/style.css?v=0314p">
-  <link rel="stylesheet" href="css/auth-theme.css?v=0309p">
+  <link rel="stylesheet" href="css/auth-theme.css?v=0317e">
+  <link rel="stylesheet" href="css/profile.css?v=0318g">
 </head>
 <body>
   <!-- 极光背景 -->
@@ -37,10 +38,13 @@
     <div class="auth-area" id="auth-area">
       <button id="btn-login" class="auth-btn">登录</button>
     </div>
-    <div class="auth-area auth-logged-in" id="auth-user-area" style="display:none;">
+    <div class="auth-area-left" id="auth-user-left" style="display:none;">
       <span id="auth-nickname" class="auth-nickname"></span>
       <span id="auth-credits" class="auth-credits"></span>
+    </div>
+    <div class="auth-area auth-logged-in" id="auth-user-area" style="display:none;">
       <button id="btn-mailbox" class="auth-btn">信箱</button>
+      <button id="btn-profile-welcome" class="auth-btn">档案</button>
       <button id="btn-settings" class="auth-btn auth-btn-small">设置</button>
     </div>
     <h1 class="welcome-title">Fizz Letter</h1>
@@ -67,6 +71,66 @@
     </div>
   </div>
 
+  <!-- 拆信：路径选择 -->
+  <div id="screen-letter-choice" class="screen">
+    <button id="btn-lc-back" class="btn-back">&larr; 返回</button>
+    <div class="lc-container">
+      <div class="lc-title">这封信，从哪里来？</div>
+      <div class="lc-options">
+        <div class="lc-option" id="btn-lc-anon">
+          <div class="lc-option-icon">✧</div>
+          <div class="lc-option-name">梦境连线</div>
+          <div class="lc-option-desc">随机词语，匿名来信</div>
+        </div>
+        <div class="lc-option" id="btn-lc-persona">
+          <div class="lc-option-icon">☽</div>
+          <div class="lc-option-name">找他入梦</div>
+          <div class="lc-option-desc">选择角色，定向来信</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 找他入梦：角色选择 -->
+  <div id="screen-dream-select" class="screen">
+    <button id="btn-ds-back" class="btn-back">&larr; 返回</button>
+    <div class="ds-container">
+      <div class="ds-title">梦境设定</div>
+      <div class="ds-slots">
+        <div class="ds-slot" id="ds-slot-self">
+          <div class="ds-slot-ava" id="ds-ava-self">
+            <img id="ds-ava-self-img" src="" alt="" style="display:none;">
+            <span id="ds-ava-self-default" class="ds-ava-placeholder">+</span>
+          </div>
+          <div class="ds-slot-label">我是</div>
+          <div class="ds-slot-name" id="ds-name-self">未选择</div>
+        </div>
+        <div class="ds-arrow">→</div>
+        <div class="ds-slot" id="ds-slot-dream">
+          <div class="ds-slot-ava" id="ds-ava-dream">
+            <img id="ds-ava-dream-img" src="" alt="" style="display:none;">
+            <span id="ds-ava-dream-default" class="ds-ava-placeholder">+</span>
+          </div>
+          <div class="ds-slot-label">写给</div>
+          <div class="ds-slot-name" id="ds-name-dream">未选择</div>
+        </div>
+      </div>
+      <div class="ds-hint">点击头像选择角色，留空即为匿名</div>
+      <button id="btn-ds-go" class="btn-glow" style="animation:none;">开始入梦</button>
+    </div>
+    <!-- 角色选择弹窗（复用联络人面板样式） -->
+    <div id="ds-pick-panel" class="wc-persona-panel" style="display:none;">
+      <div class="wc-persona-panel-bg"></div>
+      <div class="wc-persona-panel-sheet">
+        <div class="wc-pp-header">
+          <span class="wc-pp-title" id="ds-pick-title">选择角色</span>
+          <button class="wc-pp-close" id="ds-pick-close">&times;</button>
+        </div>
+        <div class="wc-pp-list" id="ds-pick-list"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- 气泡选择屏 -->
   <div id="screen-bubbles" class="screen">
     <button id="btn-back-home" class="btn-back">← 返回</button>
@@ -89,6 +153,7 @@
 
   <!-- 倾诉屏 -->
   <div id="screen-message" class="screen">
+    <button id="btn-msg-back" class="btn-back">&larr; 返回</button>
     <div class="message-box">
       <div class="message-title">想说点什么吗？</div>
       <div class="message-hint">写下此刻的心情，或者直接跳过</div>
@@ -114,6 +179,7 @@
 
   <!-- 信件屏 -->
   <div id="screen-letter" class="screen">
+    <div class="persona-bar" id="persona-bar" style="display:none;"></div>
     <div id="letter-paper" class="letter-paper template-parchment">
       <div id="letter-body"></div>
       <div id="letter-closing"></div>
@@ -326,10 +392,38 @@
         <div class="wc-list-header">
           <button id="btn-wclist-back" class="wc-list-back-btn">&larr;</button>
           <h2 class="wc-list-title">字卡传讯</h2>
-          <button id="btn-wclist-new" class="wc-list-new-btn">+</button>
+          <div class="wc-list-right">
+            <div id="wc-self-ava" class="wc-self-ava" title="切换身份">
+              <img id="wc-self-ava-img" src="" alt="">
+              <span id="wc-self-ava-default" class="wc-self-ava-fallback">我</span>
+            </div>
+            <button id="btn-wclist-new" class="wc-list-new-btn">+</button>
+          </div>
         </div>
         <div id="wc-chat-list" class="wc-chat-list"></div>
         <div id="wc-list-empty" class="wc-list-empty">还没有对话，点右上角 + 开始</div>
+        <!-- 新建对话：联络人面板 -->
+        <div id="wc-persona-panel" class="wc-persona-panel" style="display:none;">
+          <div class="wc-persona-panel-bg"></div>
+          <div class="wc-persona-panel-sheet">
+            <div class="wc-pp-header">
+              <span class="wc-pp-title">联络人</span>
+              <button class="wc-pp-close" id="wc-pp-close">&times;</button>
+            </div>
+            <div class="wc-pp-list" id="wc-pp-cards"></div>
+          </div>
+        </div>
+        <!-- 自我角色切换面板 -->
+        <div id="wc-self-panel" class="wc-persona-panel" style="display:none;">
+          <div class="wc-persona-panel-bg"></div>
+          <div class="wc-persona-panel-sheet">
+            <div class="wc-pp-header">
+              <span class="wc-pp-title">我的身份</span>
+              <button class="wc-pp-close" id="wc-self-panel-close">&times;</button>
+            </div>
+            <div class="wc-pp-list" id="wc-self-list"></div>
+          </div>
+        </div>
       </div>
 
       <!-- ===== 字卡传讯 - 聊天界面 ===== -->
@@ -348,6 +442,7 @@
               </div>
             </div>
             <div class="wc-header-actions">
+              <button id="btn-wc-call" class="wc-header-btn" title="通话"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></button>
               <button id="btn-wc-chat-settings" class="wc-header-btn wc-more-btn">⋯</button>
             </div>
             <!-- Hidden: user avatar for click to change -->
@@ -438,20 +533,27 @@
                 <button class="wc-mode-tab active" data-mode="default">默认卡</button>
                 <button class="wc-mode-tab" data-mode="custom">我的卡</button>
                 <button class="wc-mode-tab" data-mode="mixed">混合</button>
+                <button class="wc-mode-tab" data-mode="voice">语音字卡</button>
               </div>
-              <div id="wc-card-count" class="wc-card-count">0 张自定义卡</div>
-              <div id="wc-card-list" class="wc-card-list"></div>
-              <div class="wc-card-add-row">
-                <input type="text" id="wc-add-input" placeholder="写一张新卡（≤20字）" maxlength="20">
-                <button id="btn-wc-add" class="wc-add-btn">+</button>
+              <div id="wc-card-normal-content">
+                <div id="wc-card-count" class="wc-card-count">0 张自定义卡</div>
+                <div id="wc-card-list" class="wc-card-list"></div>
+                <div class="wc-card-add-row">
+                  <input type="text" id="wc-add-input" placeholder="写一张新卡（≤20字）" maxlength="20">
+                  <button id="btn-wc-add" class="wc-add-btn">+</button>
+                </div>
+                <div class="wc-batch-toggle-row">
+                  <button id="btn-wc-batch-toggle" class="wc-batch-toggle">批量添加</button>
+                </div>
+                <div id="wc-batch-area" class="wc-batch-area" style="display:none;">
+                  <textarea id="wc-batch-input" placeholder="每行一张卡，≤20字" rows="4"></textarea>
+                  <button id="btn-wc-batch-add" class="wc-add-btn">添加全部</button>
+                </div>
               </div>
-              <div class="wc-batch-toggle-row">
-                <button id="btn-wc-batch-toggle" class="wc-batch-toggle">批量添加</button>
+              <div id="wc-card-voice-content" style="display:none;">
+                <div id="wc-voice-cards-section" class="wc-vc-section"></div>
               </div>
-              <div id="wc-batch-area" class="wc-batch-area" style="display:none;">
-                <textarea id="wc-batch-input" placeholder="每行一张卡，≤20字" rows="4"></textarea>
-                <button id="btn-wc-batch-add" class="wc-add-btn">添加全部</button>
-              </div>
+
             </div>
             <!-- 表情包 tab -->
             <div id="wc-tab-stickers" class="wc-tab-content" style="display:none;">
@@ -478,6 +580,7 @@
           <!-- Input area -->
           <div class="wc-chat-input-area">
             <button id="btn-wc-sticker" class="wc-sticker-btn" title="表情包"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></button>
+            <button id="btn-wc-mic" class="wc-mic-btn" title="语音"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="1" width="6" height="11" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></button>
             <input type="text" id="wc-input" class="wc-chat-input" placeholder="说点什么...">
             <button id="btn-wc-send" class="wc-send-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>
           </div>
@@ -532,27 +635,8 @@
   <div id="screen-settings" class="screen">
     <div class="settings-box">
       <div class="settings-title">设置</div>
-      <div class="settings-section">
-        <label class="settings-label">头像</label>
-        <div class="settings-avatar-row">
-          <div class="settings-avatar-preview" id="settings-avatar-preview">
-            <img id="settings-avatar-img" src="" alt="">
-            <span class="settings-avatar-placeholder">点击上传</span>
-          </div>
-          <label class="settings-avatar-upload-btn">
-            更换头像
-            <input type="file" id="settings-avatar-file" accept="image/*" style="display:none;">
-          </label>
-        </div>
-      </div>
-      <div class="settings-section">
-        <label class="settings-label">昵称</label>
-        <div class="settings-row">
-          <input type="text" id="settings-nickname" class="auth-input" style="margin-bottom:0;flex:1;">
-          <button id="btn-save-nickname" class="btn-ghost" style="margin-left:8px;white-space:nowrap;">保存</button>
-        </div>
-        <div id="nickname-msg" class="auth-success" style="text-align:left;"></div>
-      </div>
+
+
       <div class="settings-section">
         <label class="settings-label">修改密码</label>
         <input type="password" id="settings-old-pwd" class="auth-input" placeholder="原密码">
@@ -565,6 +649,43 @@
       <div class="settings-section" style="margin-top:24px;">
         <div class="settings-label">邮箱</div>
         <div id="settings-email" style="color:var(--text-ghost);font-size:0.85rem;"></div>
+      </div>
+      <section class="settings-section" id="settings-credits-panel">
+        <div class="settings-row" style="justify-content:space-between;align-items:center;">
+          <div class="settings-label" style="margin-bottom:0;">心愿点数</div>
+          <div class="settings-label" style="margin-bottom:0;" id="settings-credits-value">--</div>
+        </div>
+        <div class="settings-hint" id="settings-credits-hint">一念即达、加速回信时会消耗点数。</div>
+      </section>
+      <!-- 语音设置 -->
+      <div class="settings-section" style="margin-top:24px;">
+        <button id="btn-voice-settings-toggle" class="btn-glow auth-submit" style="animation:none;background:var(--glass-bg);color:var(--text-main);border:1px solid var(--border-color);font-size:0.9rem;">🎙 语音设置</button>
+        <div id="voice-settings-panel" style="display:none;margin-top:12px;">
+          <label class="settings-label" style="font-size:0.8rem;color:var(--text-ghost);margin-bottom:4px;">MiniMax API Key</label>
+          <input type="password" id="voice-api-key" class="auth-input" placeholder="输入你的 MiniMax API Key">
+          <label class="settings-label" style="font-size:0.8rem;color:var(--text-ghost);margin-top:12px;margin-bottom:4px;">角色音色 ID</label>
+          <input type="text" id="voice-id" class="auth-input" placeholder="输入 Voice ID">
+          <label class="settings-label" style="font-size:0.8rem;color:var(--text-ghost);margin-top:12px;margin-bottom:4px;">模型</label>
+          <select id="voice-model" class="auth-input" style="appearance:auto;padding:10px 12px;">
+            <option value="speech-02-turbo">speech-02-turbo（快速）</option>
+            <option value="speech-02-hd">speech-02-hd（高清）</option>
+            <option value="speech-2.6-turbo">speech-2.6-turbo（新版快速）</option>
+            <option value="speech-2.6-hd">speech-2.6-hd（新版高清）</option>
+          </select>
+          <button id="btn-voice-save" class="btn-glow auth-submit" style="animation:none;margin-top:14px;font-size:0.85rem;">保存语音设置</button>
+          <div id="voice-settings-msg" style="font-size:0.8rem;margin-top:8px;text-align:center;"></div>
+        </div>
+      </div>
+      <!-- 通知设置 -->
+      <div class="settings-section" style="margin-top:24px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div class="settings-label" style="margin-bottom:0;">📞 来电通知</div>
+          <div id="notify-status" style="font-size:0.75rem;color:var(--text-ghost);"></div>
+        </div>
+        <div style="font-size:0.78rem;color:var(--text-ghost);margin:8px 0;">开启后，TA 给你打电话时会收到推送通知，即使不在网页上也能收到。</div>
+        <button id="btn-enable-notify" class="btn-glow auth-submit" style="animation:none;font-size:0.9rem;">开启来电通知</button>
+        <button id="btn-test-call" class="btn-glow auth-submit" style="animation:none;font-size:0.9rem;margin-top:10px;background:linear-gradient(135deg,#07c160,#059a4a);border:none;">📞 让 TA 给我打电话</button>
+        <div id="test-call-msg" style="font-size:0.78rem;text-align:center;margin-top:6px;color:var(--text-ghost);"></div>
       </div>
       <div class="settings-footer">
         <button id="btn-settings-back" class="btn-ghost">返回</button>
@@ -619,6 +740,306 @@
       <div id="redeem-success" class="auth-success"></div>
     </div>
   </div>
+
+  
+<!-- 档案 — 角色卡集 -->
+<div id="screen-profile-home" class="screen">
+  <button id="btn-profile-back" class="btn-back" type="button">&larr;</button>
+  <div class="profile-header">
+    <div class="profile-title">档案</div>
+    <div class="profile-tabs" id="profile-tabs">
+      <button class="profile-tab active" data-tab="self" type="button">我的档案</button>
+      <button class="profile-tab" data-tab="dream_role" type="button">TA的档案</button>
+    </div>
+  </div>
+  <div class="profile-feedback auth-error" id="profile-feedback" style="display:none;"></div>
+  <div class="profile-deck" id="profile-deck"></div>
+  <div class="profile-dots" id="profile-dots"></div>
+</div>
+
+<!-- Lightbox with flip -->
+<div class="profile-lightbox" id="profile-lightbox">
+  <div class="lb-flip" id="lb-flip">
+    <div class="lb-flip-inner" id="lb-flip-inner">
+      <div class="lb-flip-front">
+        <img class="profile-lightbox-img" id="profile-lightbox-img-front" src="" alt="">
+      </div>
+      <div class="lb-flip-back">
+        <img class="profile-lightbox-img" id="profile-lightbox-img-back" src="" alt="">
+      </div>
+    </div>
+  </div>
+  <div class="flip-hint" id="flip-hint">点击翻转</div>
+</div>
+
+<!-- 角色编辑页 -->
+<div id="screen-persona-edit" class="screen">
+  <div class="settings-box profile-form-shell">
+    <button id="btn-persona-back" class="btn-back" type="button">&larr; 返回</button>
+    <div class="settings-title" id="persona-edit-title">新建角色</div>
+    <div class="profile-form-subtitle" id="persona-edit-subtitle"></div>
+    <form id="persona-form" class="profile-form">
+
+      <!-- 头像上传（始终可见） -->
+      <div class="settings-section">
+        <label class="settings-label">头像</label>
+        <div class="profile-upload-area" id="persona-upload-avatar" style="max-width:160px;">
+          <img id="persona-preview-avatar" class="profile-upload-preview" src="" alt="" style="display:none;">
+          <div id="persona-placeholder-avatar" class="profile-upload-placeholder">
+            <span class="profile-upload-icon">+</span>
+            <span class="profile-upload-text">上传</span>
+          </div>
+          <input type="file" id="persona-input-avatar" accept="image/*" style="display:none;">
+        </div>
+      </div>
+
+      <!-- 姓名（始终可见） -->
+      <div class="settings-section">
+        <label class="settings-label" for="persona-name">姓名 *</label>
+        <input id="persona-name" name="name" class="auth-input" type="text" maxlength="32" placeholder="给这个角色起一个名字">
+      </div>
+
+      <!-- 简介（始终可见） -->
+      <div class="settings-section">
+        <label class="settings-label" for="persona-summary">简介</label>
+        <textarea id="persona-summary" name="summary" class="auth-input profile-textarea" rows="4" placeholder="写一段关于这个角色的介绍……"></textarea>
+      </div>
+
+      <input type="hidden" id="persona-type" name="type" value="dream_role">
+
+      <!-- 高级设定 toggle（self 模式显示，dream_role 隐藏） -->
+      <div class="pform-advanced-toggle" id="pform-advanced-toggle">
+        <span>高级设定</span>
+        <span class="pform-advanced-arrow" id="pform-advanced-arrow">&#9662;</span>
+      </div>
+
+      <!-- 高级设定内容体（self 折叠，dream_role 始终展开） -->
+      <div id="pform-advanced-body">
+
+        <!-- 立绘上传 -->
+        <div class="settings-section">
+          <label class="settings-label">立绘</label>
+          <div class="profile-upload-area" id="persona-upload-illust" style="max-width:160px;">
+            <img id="persona-preview-illust" class="profile-upload-preview" src="" alt="" style="display:none;">
+            <div id="persona-placeholder-illust" class="profile-upload-placeholder">
+              <span class="profile-upload-icon">+</span>
+              <span class="profile-upload-text">上传</span>
+            </div>
+            <input type="file" id="persona-input-illust" accept="image/*" style="display:none;">
+          </div>
+        </div>
+
+        <!-- 基础信息 -->
+        <div class="pform-section-title">基础信息</div>
+        <div class="pform-row">
+          <div class="settings-section pform-half">
+            <label class="settings-label" for="persona-occupation">职业</label>
+            <input id="persona-occupation" name="occupation" class="auth-input" type="text" maxlength="50" placeholder="例如：刑警、钢琴家">
+          </div>
+          <div class="settings-section pform-half">
+            <label class="settings-label" for="persona-age">年龄</label>
+            <input id="persona-age" name="age" class="auth-input" type="text" maxlength="20" placeholder="例如：22">
+          </div>
+        </div>
+        <div class="settings-section">
+          <label class="settings-label" for="persona-height">身高</label>
+          <input id="persona-height" name="height" class="auth-input" type="text" maxlength="24" placeholder="例如：178cm">
+        </div>
+        <div class="pform-row">
+          <div class="settings-section pform-half">
+            <label class="settings-label" for="persona-eye-color">瞳色</label>
+            <input id="persona-eye-color" name="eye_color" class="auth-input" type="text" maxlength="20" placeholder="例如：琥珀色">
+          </div>
+          <div class="settings-section pform-half">
+            <label class="settings-label" for="persona-hair-color">发色</label>
+            <input id="persona-hair-color" name="hair_color" class="auth-input" type="text" maxlength="20" placeholder="例如：银灰">
+          </div>
+        </div>
+
+        <!-- 关系（仅梦角显示） -->
+        <div id="persona-section-relationship">
+          <div class="pform-section-title">关系</div>
+          <div class="settings-section">
+            <label class="settings-label" for="persona-source">TA 来自什么世界</label>
+            <input id="persona-source" name="source" class="auth-input" type="text" maxlength="100" placeholder="例如：原创、某部小说/动漫/游戏的世界">
+          </div>
+          <div class="settings-section">
+            <label class="settings-label" for="persona-relationship">和你的关系</label>
+            <input id="persona-relationship" name="relationship" class="auth-input" type="text" maxlength="100" placeholder="例如：恋人、学长、竹马、宿敌">
+          </div>
+        </div>
+
+        <!-- 性格标签 -->
+        <div class="settings-section">
+          <label class="settings-label" for="persona-tags">性格标签</label>
+          <input id="persona-tags" name="tags" class="auth-input" type="text" maxlength="200" placeholder="用顿号分隔">
+        </div>
+
+        <!-- 属性条 -->
+        <div class="pform-section-title">属性</div>
+        <div class="pform-attr">
+          <div class="pform-attr-row">
+            <span class="pform-attr-label-l">理性</span>
+            <input type="range" id="attr-rational" class="pform-slider" min="0" max="100" value="50">
+            <span class="pform-attr-label-r">感性</span>
+          </div>
+          <div class="pform-attr-row">
+            <span class="pform-attr-label-l">被动</span>
+            <input type="range" id="attr-active" class="pform-slider" min="0" max="100" value="50">
+            <span class="pform-attr-label-r">主动</span>
+          </div>
+          <div class="pform-attr-row">
+            <span class="pform-attr-label-l">占有欲弱</span>
+            <input type="range" id="attr-possessive" class="pform-slider" min="0" max="100" value="50">
+            <span class="pform-attr-label-r">占有欲强</span>
+          </div>
+          <div class="pform-attr-row">
+            <span class="pform-attr-label-l">内敛</span>
+            <input type="range" id="attr-expressive" class="pform-slider" min="0" max="100" value="50">
+            <span class="pform-attr-label-r">张扬</span>
+          </div>
+          <div class="pform-attr-row">
+            <span class="pform-attr-label-l">温柔</span>
+            <input type="range" id="attr-tough" class="pform-slider" min="0" max="100" value="50">
+            <span class="pform-attr-label-r">强硬</span>
+          </div>
+        </div>
+
+        <!-- 其他 -->
+        <div class="settings-section" style="margin-top:24px;">
+          <label class="settings-label" for="persona-extra">其他补充</label>
+          <textarea id="persona-extra" name="extra" class="auth-input profile-textarea" rows="3" placeholder="口头禅、禁忌、喜欢的称呼……"></textarea>
+        </div>
+      </div>
+
+      <div class="auth-error" id="persona-form-message" style="display:none;"></div>
+      <div class="profile-form-footer">
+        <button id="btn-persona-cancel" class="btn-ghost" type="button">取消</button>
+        <button id="btn-persona-save" class="btn-glow" type="submit" style="animation:none;">保存角色</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+  <!-- 配对编辑页 -->
+  <div id="screen-pairing-edit" class="screen">
+    <div class="settings-box profile-form-shell">
+      <button id="btn-pairing-back" class="btn-back" type="button">&larr; 返回</button>
+      <div class="settings-title" id="pairing-edit-title">新建配对</div>
+      <div class="profile-form-subtitle" id="pairing-edit-subtitle">选择一组角色，再把关系和互动方式写清楚。</div>
+
+      <form id="pairing-form" class="profile-form">
+        <div class="settings-section">
+          <label class="settings-label" for="pairing-self">自设角色 *</label>
+          <select id="pairing-self" name="selfPersonaId" class="auth-input"></select>
+        </div>
+
+        <div class="settings-section">
+          <label class="settings-label" for="pairing-dream">梦角角色 *</label>
+          <select id="pairing-dream" name="dreamPersonaId" class="auth-input"></select>
+        </div>
+
+        <div class="settings-section">
+          <label class="settings-label" for="pairing-relation">关系标签 *</label>
+          <select id="pairing-relation" name="relationPreset" class="auth-input">
+            <option value="">请选择</option>
+            <option value="恋人">恋人</option>
+            <option value="暧昧">暧昧</option>
+            <option value="青梅竹马">青梅竹马</option>
+            <option value="破镜重圆">破镜重圆</option>
+            <option value="相爱相杀">相爱相杀</option>
+            <option value="守护">守护</option>
+            <option value="并肩作战">并肩作战</option>
+            <option value="其他">其他</option>
+          </select>
+        </div>
+
+        <div class="settings-section" id="pairing-relation-custom-wrap" style="display:none;">
+          <label class="settings-label" for="pairing-relation-custom">自定义关系标签</label>
+          <input id="pairing-relation-custom" name="relationCustom" class="auth-input" type="text" maxlength="24" placeholder="写一个你们自己的关系名字">
+        </div>
+
+        <div class="settings-section">
+          <label class="settings-label" for="pairing-dynamic">相处模式</label>
+          <textarea id="pairing-dynamic" name="interactionStyle" class="auth-input profile-textarea" rows="4" placeholder="例如：他总是嘴硬，真正纵着我的时候反而更冷静。"></textarea>
+        </div>
+
+        <div class="settings-section">
+          <label class="settings-label" for="pairing-self-call">你怎么叫对方</label>
+          <input id="pairing-self-call" name="selfCall" class="auth-input" type="text" maxlength="24" placeholder="例如：川川">
+        </div>
+
+        <div class="settings-section">
+          <label class="settings-label" for="pairing-dream-call">对方怎么叫你</label>
+          <input id="pairing-dream-call" name="dreamCall" class="auth-input" type="text" maxlength="24" placeholder="例如：大宝">
+        </div>
+
+        <div class="settings-section">
+          <label class="settings-row" style="cursor:pointer;">
+            <input id="pairing-active" name="activate" type="checkbox" style="margin-right:10px;">
+            <span class="settings-label" style="margin:0;">设为当前配对</span>
+          </label>
+        </div>
+
+        <div class="profile-form-note" id="pairing-form-hint"></div>
+        <div class="auth-error" id="pairing-form-message" style="display:none;"></div>
+
+        <div class="profile-form-footer">
+          <button id="btn-pairing-cancel" class="btn-ghost" type="button">取消</button>
+          <button id="btn-pairing-save" class="btn-glow" type="submit" style="animation:none;">保存配对</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 卡片模板 -->
+  <template id="template-profile-persona-card">
+    <article class="profile-card" data-persona-id="">
+      <div class="profile-card-top">
+        <div class="profile-card-main">
+          <div class="profile-card-name"></div>
+          <div class="profile-card-summary"></div>
+        </div>
+        <span class="profile-card-tag"></span>
+      </div>
+      <div class="profile-card-meta"></div>
+      <div class="profile-card-extra" style="display:none;"></div>
+      <div class="profile-card-actions">
+        <button class="btn-ghost" type="button" data-action="edit">编辑</button>
+        <button class="btn-ghost" type="button" data-action="delete">删除</button>
+      </div>
+    </article>
+  </template>
+
+  <template id="template-profile-pairing-card">
+    <article class="profile-pairing-card" data-pairing-id="">
+      <div class="profile-pairing-top">
+        <div class="profile-pairing-badge" style="display:none;">当前配对</div>
+        <div class="profile-pairing-relation"></div>
+      </div>
+      <div class="profile-pairing-characters">
+        <div class="profile-pairing-side">
+          <div class="profile-pairing-name profile-pairing-self-name"></div>
+          <div class="profile-pairing-type profile-pairing-self-type"></div>
+        </div>
+        <div class="profile-pairing-arrow">&harr;</div>
+        <div class="profile-pairing-side">
+          <div class="profile-pairing-name profile-pairing-dream-name"></div>
+          <div class="profile-pairing-type profile-pairing-dream-type"></div>
+        </div>
+      </div>
+      <div class="profile-pairing-details">
+        <div class="profile-pairing-mode"></div>
+        <div class="profile-pairing-calls"></div>
+      </div>
+      <div class="profile-pairing-actions">
+        <button class="btn-ghost" type="button" data-action="activate">设为当前</button>
+        <button class="btn-ghost" type="button" data-action="edit">编辑</button>
+        <button class="btn-ghost" type="button" data-action="delete">删除</button>
+      </div>
+    </article>
+  </template>
 
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <!-- ═══ 信友：邮箱首页 ═══ -->
@@ -745,16 +1166,17 @@
   </div>
   <script src="js/letters.js?v=0309p"></script>
   <script src="js/bubbles.js?v=0309p"></script>
-  <script src="js/answer.js?v=0309p"></script>
-  <script src="js/tarot.js?v=0309w"></script>
-  <script src="js/lenormand.js?v=0309a"></script>
+  <script src="js/answer.js?v=0317f"></script>
+  <script src="js/tarot.js?v=0317f"></script>
+  <script src="js/lenormand.js?v=0317f"></script>
   <script src="js/word-cards.js?v=0310e"></script>
-  <script src="js/auth.js?v=0309p"></script>
+  <script src="js/auth.js?v=0316e"></script>
+  <script src="js/profile.js?v=0318h"></script>
   <script src="js/penpal.js?v=0310h"></script>
   <script src="js/fizz-ui.js?v=0310d"></script>
   <script>window.onerror=function(m,s,l,c,e){var d=document.createElement("div");d.style="position:fixed;top:0;left:0;right:0;background:red;color:white;padding:10px;z-index:99999;font-size:12px;word-break:break-all;";d.textContent="ERR: "+m+" at line "+l;document.body.appendChild(d);};</script>
-  <script src="js/app.js?v=0314f"></script>
-  <script src="js/wordcard-app.js?v=0314g"></script>
+  <script src="js/app.js?v=0319d"></script>
+  <script src="js/wordcard-app.js?v=0319d"></script>
   <script>
     if ('serviceWorker' in navigator) {
       // 强制清除旧缓存并更新 SW
